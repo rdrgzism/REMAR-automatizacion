@@ -6,7 +6,7 @@
 # Paths configuration
 paths:
   raw_data: "/home/usrpesca/"    # Path to raw .MDB files from la Lonja
-  csv_data: "../data/ventasLonja/"   # Folder with cleaned .CSV files
+  csv_data: "../data/ventaslonja/"   # Folder with cleaned .CSV files
   backup_data: "../data/backup/"    # Optional backup folder - Will see if useful, if not remove it
   logs: "../logs/"    # Where to store logs
   scripts_python: "../scripts/python/"

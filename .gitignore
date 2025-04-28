@@ -28,3 +28,6 @@ desktop.ini
 
 # Ignore PyCharm settings
 .idea/
+
+# Ignore the data folder
+data/
