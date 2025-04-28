@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+#---------------------------------------
+# Estimating fishing effort for small-scale fisheries from vessel monitoring system
+#   1/5
+#---------------------------------------
+
 import os
 import warnings
 import pyodbc
