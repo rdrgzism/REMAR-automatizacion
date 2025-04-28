@@ -1,0 +1,30 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore R temporary files
+.Rhistory
+.RData
+.Rproj.user/
+
+# Ignore Conda environments
+env/
+*.env
+*.yaml.lock
+
+# Ignore logs
+logs/
+*.log
+
+# Ignore sensitive configs
+config/.env
+config/db_config.json
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ignore PyCharm settings
+.idea/

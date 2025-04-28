@@ -1,0 +1,74 @@
+# ----------------------------------------
+# REMAR-automatizacion - Settings File
+# Paths & DB configuration configurations
+# ----------------------------------------
+
+# Paths configuration
+paths:
+  raw_data: "/home/usrpesca/"    # Path to raw .MDB files from la Lonja
+  csv_data: "../data/ventasLonja/"   # Folder with cleaned .CSV files
+  backup_data: "../data/backup/"    # Optional backup folder - Will see if useful, if not remove it
+  logs: "../logs/"    # Where to store logs
+  scripts_python: "../scripts/python/"
+  scripts_r: "../scripts/r/"
+
+# Database configuration
+database:
+  host: ""
+  port: 5432
+  dbname: "remar_data"
+  user: "remar_user"
+  password: "db_password"
+  schema: "public"
+  target_table: "hojas_ventas_mallorca"
+
+# Cron settings (optional)
+cron:
+  frequency: "every 2 days"
+  time: "20:00"
+  run_script: "../run_job.sh"
+
+# Preprocessing settings
+preprocessing:
+  timezone: "Europe/Madrid"
+  encoding_input: "latin1"
+  encoding_output: "utf-8"
+  missing_values_strategy: "drop"
+
+# R script settings
+r_config:
+  rscript_path: "/usr/bin/Rscript"    # Adjust if needed
+  r_libraries_needed:
+    - dplyr
+    - factorextra
+    - RWeka
+    - PCDimension
+    - rstan
+
+# Python script settings
+python_config:
+  python_path: "/usr/bin/python3"
+  python_libraries_needed:
+    - pandas
+    - pyodbc
+    - python-dotenv
+
+# Email notifications (optional)
+notifications:
+  enabled: false
+  email_from: "ismael.rodriguez@fueib.org"
+  email_to:         # Hablar con Miquel para añadir los contactos a quiénes haya que avisar
+    - "contacto1@empresa.com"
+    - "contacto1@empresa.com"
+    - "contacto1@empresa.com"
+  smtp_server: "smtp.domain.com"    # Actualizar estos campos para usar gmail + dotenv para los datos del correo electronico
+  smtp_port: 587
+  use_tls: true
+  username: "email_username"
+  password: "email_password"
+
+# General
+project:
+  name: "REMAR_Automatizacion"
+  author: "Ismael Rodriguez"
+  version: "1.0"
