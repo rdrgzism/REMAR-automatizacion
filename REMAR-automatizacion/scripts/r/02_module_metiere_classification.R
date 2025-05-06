@@ -43,18 +43,18 @@ reference_dir <- "../../data/reference"
 load(file.path(rdata_dir, "sample.RData")) 
 load(file.path(rdata_dir, "classificadors.RData"))
 
-results <- data.frame(journey = journey_list)
-
 OUT <- data.frame(OUT)
-for(class_name in names(classifiers)){
-  clf <- classifiers[[class_name]]
-  
-  labels <- c()
-  
-  for(i in seq_along(journey_list)){
-    sample <- OUT[i, ]
+results <- list()
+results$class <- rep(NA, length(journey_list))
+
+for(i in seq_along(journey_list)){
+  sample <- OUT[i, ]
+  classified <- FALSE
+  for(class_name in names(classifiers)){
+    clf <- classifiers[[class_name]]
+    
     temp_names <- make.names(colnames(sample), unique = TRUE)
-    selected_species <- which(temp_names %in% clf$sp.names)
+    selected_species <- which( temp_names %in% clf$sp.names)
     new <- sample[selected_species]
     
     # Classification
@@ -64,16 +64,32 @@ for(class_name in names(classifiers)){
                                      n.axes = clf$n.axes,
                                      sco.names = clf$sco.names,
                                      classifier = clf$classifier)
-    labels <- c(labels, label)
+    if(label == "1"){
+      results$class[i] <- class_name
+      classified <- TRUE
+      break
+    } else if(label == "10"){
+      results$class[i] <- "tresmall"
+      classified <- TRUE
+      break
+    } else if(label == "01"){
+      results$class[i] <- "palangre"
+      classified <- TRUE
+      break
+    }
   }
-  
-  results[[class_name]] <- labels
 }
 
-idx_jonquillo <- which(results$jonquillera == "1")
+idx_jonquillo <- which(results$class == "jonquillera")
+# Predicted JONQUILLO
 OUT_jonquillo <- OUT[idx_jonquillo, , drop = FALSE]
 journey_jonquillo <- journey_list[idx_jonquillo]
 
-idx_tresmall <- which(results$tresmall == "10")
+idx_tresmall <- which(results$class == "tresmall")
+# Predicted TRASMALLO
 OUT_tresmall <- OUT[idx_tresmall, , drop = FALSE]
 journey_tresmall <- journey_list[idx_tresmall]
+
+save(
+  OUT_jonquillo, journey_jonquillo, OUT_tresmall, journey_tresmall,
+  file = file.path(rdata_dir, "predicted.RData"))
