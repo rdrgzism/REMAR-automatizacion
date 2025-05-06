@@ -30,8 +30,12 @@ library(dplyr)
 rm(list = ls())
 
 # --- Folder paths
+setwd(
+  "C:/Users/UIB/Desktop/REMAR-automatizacion/REMAR-automatizacion/scripts/r"
+  )
 input_dir <- "../../data/ventaslonja"
-output_dir <- "../../data/rdata"
+rdata_dir <- "../../data/rdata"
+processed_dir <- "../../data/processed"
 reference_dir <- "../../data/reference"
 
 # Read CSV files from input_dir
@@ -100,7 +104,7 @@ if(length(temp) > 0) {DATA <- DATA[-temp, ]}
 
 # 3. Check for errors in codification
 corrections <- c(
-  "JONQ./CABOTÃ­" = "JONQ./CABOTÍ",
+  "JONQ./CABOTÃ-" = "JONQ./CABOTÍ",
   "LLUÃ‡ Gros" = "LLUÇ Gros",
   "LLUÃ‡ Mitja" = "LLUÇ Mitja",
   "LLUÃ‡ Petit" = "LLUÇ Petit",
@@ -126,7 +130,7 @@ for(i in seq_along(species_list)) {
   temp2 <- which(DATA$CONCEPTO %in% temp)
   DATA$CONCEPTO[temp2] <- species[i, 1]
 }
-unique(DATA$CONCEPTO)
+
 # Once the species names are standardized, check for species not in species_list
 new_species <- setdiff(unique(DATA$CONCEPTO), species_list)
 
@@ -181,4 +185,5 @@ for(i in seq_along(journey_list)){
   }
 }
 
-save(DATA, OUT, journey_list, species_list, file = file.path(output_dir,"sample.RData"))
+write.csv(DATA, file.path(processed_dir,"DATA_final.csv"), row.names = FALSE)
+save(OUT, journey_list, file = file.path(rdata_dir,"sample.RData"))
