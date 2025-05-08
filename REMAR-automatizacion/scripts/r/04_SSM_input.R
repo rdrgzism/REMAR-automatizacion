@@ -22,9 +22,10 @@ setwd(
   "C:/Users/UIB/Desktop/REMAR-automatizacion/REMAR-automatizacion/scripts/r"
 )
 rdata_dir <- "../../data/rdata"
-
+shp_morunas <- "../../data/shp/Morunas.shp"
 # Load data
 load(file.path(rdata_dir, "raw_tresmall_tracks.RData"))
+morunas <- st_read(shp_morunas, quiet = TRUE)
 
 df_tracks$GPSDate <- as.Date(df_tracks$GPSDateTime)
 df_tracks$Codi <- paste(df_tracks$GPSDate, df_tracks$VesselName, df_tracks$Cfr, sep = "//")
@@ -34,10 +35,11 @@ df_tracks <- df_tracks %>%
   arrange(Codi, GPSDateTime)
 
 # Calcular la diferencia de tiempo en segundos
+# Situaciones de vuelta a puerto o fallo de CV durante ~1h.
 df_tracks <- df_tracks %>%
   group_by(Codi) %>%
   mutate(time_diff = as.numeric(difftime(GPSDateTime, lag(GPSDateTime), units = "secs")),
-         sortida = cumsum(is.na(time_diff) | time_diff > 3600) + 1) %>%
+         sortida = cumsum(is.na(time_diff) | time_diff > 3600)) %>%
   ungroup()
 
 data <- df_tracks
@@ -45,16 +47,10 @@ data <- df_tracks
 # preparing data: input and state.list
 #----------
 
-# Definir parámetros
-period <- 4 * 60 # Aquí cambiaríamos 2 para jonquillo, 4 para gerret
-journey_list <- unique(data$Codi)
-n_journeys <- length(journey_list)
-input <- data.frame()
-
 codis_validos <- data %>%
   group_by(Codi) %>%
   summarise(n_puntos = n(), .groups = "drop") %>%
-  filter(n_puntos >=5) %>%
+  filter(n_puntos >= 5) %>%  # Subirlo al cambiar el periodo para otras metieres
   arrange(n_puntos) %>%
   pull(Codi)
 
@@ -62,9 +58,16 @@ codis_validos <- data %>%
 data <- data %>%
   filter(Codi %in% codis_validos)
 
+# Definir parámetros
+period <- 4 * 60 # Aquí cambiaríamos 2 para jonquillo, 4 para gerret
+journey_list <- unique(data$Codi)
+n_journeys <- length(journey_list)
+input <- data.frame()
+
+
 # Bucle principal
 for(i in seq_along(journey_list)) {
-  
+
   journey_data <- data[data$Codi == journey_list[i], ]
   sortida_list <- unique(journey_data$sortida)
   
@@ -104,54 +107,30 @@ for(i in seq_along(journey_list)) {
     temp_df$sortida <- sortida_list[j]
     
     # Acumular los datos en input
-    input = rbind(input, temp_df)
+    input <- rbind(input, temp_df)
   }
 }
 
-
-# Graficar los resultados
-# plot(temp_df$x, temp_df$y, col = "black", pch = 19, 
-#      main = paste(journey_list[i], sortida_list[j], sep = " - "))
-# lines(temp_df$x, temp_df$y)
-# points(temp_df$x[1], temp_df$y[1], col = "blue", cex = 2)
-# points(temp_df$x[nrow(temp_df)], temp_df$y[nrow(temp_df)], col = "red", cex = 2)
-# legend("topright",
-#        c("Transit", "first", "last"),
-#        pch = c(19, 1, 1),
-#        col = c(1, "blue", "red"), cex = 0.5)
-
-journey_interpolado =  unique(input$journey)
-input$Codi = input$journey
-
-input$x=input$x+runif(length(input$x),-1,1)
-input$y=input$y+runif(length(input$y),-1,1)
+# Small displacement to avoid same coordinates for different times
+input$x <- input$x+runif(length(input$x),-1,1)
+input$y <- input$y+runif(length(input$y),-1,1)
 
 #PASAMOS A SF
-sf_input = st_as_sf(input, coords = c("x", "y"), crs = 25831)
+sf_input <- st_as_sf(input, coords = c("x", "y"), crs = 25831)
 
 #ELIMINAR MORUNAS
 # Transformar al sistema de coordenadas EPSG: 25831
 morunas <- st_transform(morunas, crs = 25831)
-
+mapview(morunas) + mapview(sf_input, zcol = "journey")
 # sum(st_is_empty(sf_data_sin_puertos))  # ¿Cuántos puntos están vacíos?
-puntos_morunas <- st_within(sf_input, morunas, sparse = FALSE)
-sf_input <- sf_input[!apply(puntos_morunas, 1, any), ]
-
-mapview(sf_input, zcol = "state") + mapview(morunas, col.region="yellow")
+temp <- lengths(st_intersects(sf_input, morunas)) > 0
+sf_input <- sf_input[!temp, ]
 
 #QUITAR GEOMETRIAS para tener data frame
-# Extraer coordenadas
-coords <- st_coordinates(sf_input) %>%
-  as.data.frame() %>%
-  rename(x = X, y = Y)
-
-# Convertir sf a data frame y agregar coordenadas
-input <- sf_input %>%
-  st_drop_geometry() %>%
-  bind_cols(coords)
-
-# Verificar el resultado
-head(input)
+sf_input$X <- st_coordinates(sf_input)[, 1]  
+sf_input$Y <- st_coordinates(sf_input)[, 2]  
+input <- st_drop_geometry(sf_input)
+journey_list <- unique(input$journey)
 
 save(input, period,
-     journey_list,n_journeys,file="input_Llagosta_2024.RData")
+     journey_list,n_journeys,file=file.path(rdata_dir, "input_llagosta.RData"))

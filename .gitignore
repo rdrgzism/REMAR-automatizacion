@@ -3,17 +3,22 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Ignore R temporary files
+# Ignore R seassion files
 .Rhistory
 .RData
 .Rproj.user/
 
-# Ignore Conda environments
-env/
-*.env
-*.yaml.lock
+# Ignore environment files
+.env
+.envrc
+*.yarn.lock
 
-# Ignore logs
+# Ignore Conda environment folders
+.env/
+env/
+.venv/
+
+# Ignore log files
 logs/
 *.log
 
@@ -28,6 +33,7 @@ desktop.ini
 
 # Ignore PyCharm settings
 .idea/
+.vscode/
 
 # Ignore the data folder
 data/
