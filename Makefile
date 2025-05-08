@@ -1,4 +1,4 @@
-ENV_NAME = remarpipeline
+ENV_NAME=remarpipeline
 
 all: env setup-cmdstanr
 

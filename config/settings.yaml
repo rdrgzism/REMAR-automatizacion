@@ -6,6 +6,7 @@
 # Paths configuration
 paths:
   raw_data: "../../data/raw_data/"    # Path to raw .MDB files from la Lonja
+  tracks_data: "../../data/cajasverdes"   # Path to raw .CSV for boats GPS data
   csv_data: "../../data/ventaslonja/"   # Folder with cleaned .CSV files
   # backup_data: "../data/backup/"    # Optional backup folder - Will see if useful, if not remove it
   logs: "../logs/"    # Where to store logs

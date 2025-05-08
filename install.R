@@ -6,7 +6,7 @@ if(!requireNamespace("remotes", quietly = TRUE)){
 }
 
 # Install cmdstanr from GitHub
-remotes::install_github("stan-dev/cmdstanr"), dependencies = TRUE)
+remotes::install_github("stan-dev/cmdstanr", dependencies = TRUE)
 
 # Load library
 library(cmdstanr)
