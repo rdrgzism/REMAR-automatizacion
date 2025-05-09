@@ -6,11 +6,25 @@
 # Paths configuration
 paths:
   raw_data: "../../data/raw_data/"    # Path to raw .MDB files from la Lonja
-  csv_data: "../../data/ventaslonja/"   # Folder with cleaned .CSV files
+  csv_data: "../../data/processed/"   # Folder with cleaned .CSV files
   # backup_data: "../data/backup/"    # Optional backup folder - Will see if useful, if not remove it
   logs: "../logs/"    # Where to store logs
   scripts_python: "../scripts/python/"
   scripts_r: "../scripts/r/"
+  # modelo gamba
+  MODEL_WEIGHTS: "/home/deepecomar/YOLOv8/ultralytics/examples/gamba_ENTRENAMIENTO/train4/weights/best.pt"
+  # Ruta al directorio con los archivos .7z
+  CARPETA_7Z: "/extusers/llotja/"
+  # Ruta al directorio que contiene los subdirectorios con labels
+  INFERENCIA_DIR: "./INFERENCIAS/"
+  # Ruta al directorio donde guardar los resultados
+  OUTPUT_DIR: "./RESULTADOS/"
+  # Directorio para los data frames unificados
+  MERGE_DIR: "./MERGE/"
+
+# Configurable para seleccionar el año de la inferencia ****SOLO PARA GAMBA****
+inferencia:
+  YEAR: 2023
 
 # Database configuration
 database:
