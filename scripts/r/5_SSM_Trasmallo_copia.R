@@ -22,7 +22,7 @@ library(eRTG3D)
 rm(list = ls())
 
 # --- Configuration
-metier <- "llagosta"
+metier <- "tresmall"
 period <- 4 * 60  # seconds between interpolated points (adjust per metier)
 
 # --- Folder paths
@@ -33,8 +33,8 @@ models_dir <- "../../models"
 
 # Load model and input data
 mod <- cmdstan_model(file.path(models_dir, "model.stan"))
-load(file.path(rdata_dir, paste0("input_", metier, ".RData")))
 load(file.path(rdata_dir, paste0("priors_modelo_", metier, ".RData")))
+load(file.path(rdata_dir, paste0("input_", metier, ".RData")))
 
 # Format timestamp and journey ID
 input$time <- as.POSIXct(input$time)

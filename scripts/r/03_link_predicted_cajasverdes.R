@@ -30,7 +30,7 @@ library(lubridate)
 rm(list = ls())
 
 # --- Folder paths
-setwd("C:/Users/UIB/Desktop/REMAR-automatizacion/REMAR-automatizacion/scripts/r")
+setwd("C:/Users/UIB/Desktop/REMAR-automatizacion/scripts/r")
 rdata_dir   <- "../../data/rdata"
 tracks_dir  <- "../../data/cajasverdes"
 shp_ports   <- "../../data/shp/Buffer_Puertos.shp"

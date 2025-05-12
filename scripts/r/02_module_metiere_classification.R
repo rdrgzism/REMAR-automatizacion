@@ -32,7 +32,7 @@ library(RWeka)
 rm(list = ls())
 
 # --- Folder paths
-setwd("C:/Users/UIB/Desktop/REMAR-automatizacion/REMAR-automatizacion/scripts/r")
+setwd("C:/Users/UIB/Desktop/REMAR-automatizacion/scripts/r")
 input_dir     <- "../../data/ventaslonja"
 rdata_dir     <- "../../data/rdata"
 processed_dir <- "../../data/processed"
@@ -91,7 +91,7 @@ for (i in seq_along(journey_list)) {
 }
 
 # ---------------------------------------
-# SPLIT RESULTS BY MÉTIER
+# SPLIT RESULTS BY METIER
 # ---------------------------------------
 
 # Jonquillera
