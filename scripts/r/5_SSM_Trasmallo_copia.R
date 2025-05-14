@@ -57,7 +57,7 @@ for (i in seq_len(nrow(unique_tracks))) {
   if (nrow(track_data) < 3) next
 
   # Remove duplicates
-  track_data <- track_data[!duplicated(track_data$GPSDateTime), ]
+  track_data <- track_data[!duplicated(track_data$time), ]
   if (nrow(track_data) < 3) next
 
   # Prepare data for step-angle extraction
