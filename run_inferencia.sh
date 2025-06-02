@@ -36,15 +36,17 @@ run_step() {
 log_info "INICIO PIPELINE DE INFERENCIA GAMBA"
 
 # Paso 1: Inferencia YOLO + metadatos
-run_step "01_infer_yolo.py"          "python3 scripts/python/inferencia/01_infer_yolo.py"
+run_step "1_inference_gamba_args.py"          "python scripts/python/1_inference_gamba_args.py"
 
 # Paso 2: Calcular áreas a partir de las etiquetas
-run_step "02_calcular_areas.py"     "python3 scripts/python/inferencia/02_calcular_areas.py"
+run_step "2_calcular_areas_segmentos_gamba.py"     "python scripts/python/2_calcular_areas_segmentos_gamba.py"
 
 # Paso 3: Ajustar biomasa y estimar número de gambas
-run_step "03_estimacion_biomasa.py" "python3 scripts/python/inferencia/03_estimacion_biomasa.py"
+run_step "3_calculo_peso_medio_num_gamba.py" "python scripts/python/3_calculo_peso_medio_num_gamba.py"
 
 # Paso 4: Fusionar con datos de lonja
-run_step "04_merge_inferencia_lonja.py" "python3 scripts/python/inferencia/04_merge_inferencia_lonja.py"
+run_step "4a_convierte_mdb_a_csv.py" "python scripts/python/4a_convierte_mdb_a_csv.py"
+
+run_step "4b_combina_lonja_imagen.py" "python scripts/python/4b_combina_lonja_imagen.py"
 
 log_info "INFERENCIA COMPLETADA CON ÉXITO"
