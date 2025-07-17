@@ -25,17 +25,20 @@
 #   > OUT_<metier>, journey_<metier>
 
 # --- Libraries
+library(dotenv)
 library(mldr)
 library(RWeka)
 
 rm(list = ls())
 
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+
 # --- Folder paths
 # rdata_dir     <- "../../data/rdata"
 # processed_dir <- "../../data/processed"
 
-setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
-rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
+setwd(Sys.getenv("WORKING_DIR"))
+rdata_dir      <- Sys.getenv("RDATA_DIR")
 
 # --- Utility function to extract output per metier
 extract_metier <- function(name, results, OUT, journey_list) {

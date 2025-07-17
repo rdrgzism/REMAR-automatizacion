@@ -24,10 +24,13 @@
 # sells bills for over 6 moths are considered retired.
 
 # --- Libraries
+library(dotenv)
 library(stringr)
 library(dplyr)
 
-# rm(list = ls())
+rm(list = ls())
+
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 
 # --- Folder paths
 # input_dir      <- "../../data/ventaslonja"
@@ -36,12 +39,12 @@ library(dplyr)
 # logs_dir <- "../../logs"
 # reference_dir  <- "../../data/reference"
 
-setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
-input_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/ventaslonja")
-rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
-processed_dir  <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/processed")
-reference_dir  <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/reference")
-logs_dir       <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/logs")
+setwd(Sys.getenv("WORKING_DIR"))
+input_dir      <- Sys.getenv("INPUT_DIR")
+rdata_dir      <- Sys.getenv("RDATA_DIR")
+processed_dir  <- Sys.getenv("PROCESSED_DIR")
+reference_dir  <- Sys.getenv("REFERENCE_DIR")
+logs_dir       <- Sys.getenv("LOGS_DIR")
 
 # --- Load all CSV sales bill files
 list_dirs <- list(input_dir = input_dir,
@@ -123,13 +126,24 @@ unknown_boats <- setdiff(DATA$CODCENSO, boats$CODCENSO)
 # [1] "LA TAU"          "NA MANDRIA"      "NUEVO MARTINA"   "DES PAS SEGUNDO" "ES FERRE II"     "PEDRO Y BEATRIZ"
 if (length(unknown_boats) > 0) {
   log_unknown_boats <- data.frame(
-    FECHA = Sys.Date(),
     NEMBARCACION = unique(DATA$NEMBARCACION[DATA$CODCENSO %in% unknown_boats]),
     CODCENSO = unknown_boats
   )
-  log_path <- paste0(logs_dir, "/unknown_boats_", today_str, ".csv")
-  
-  write.csv(log_unknown_boats, log_path, row.names = FALSE)
+
+  # Log new boats not present in the species list
+  log_file <- paste0(logs_dir, "/unknown_boats_", today_str, ".csv")
+  new_entries <- data.frame(
+    CODCENSO = unknown_boats,
+    NEMBARCACIONs = log_unknown_boats$NEMBARCACION,
+    CFR = paste0("ESP", sprintf("%09d", unknown_boats))
+  )
+  write.csv(new_entries, log_file, row.names = FALSE)
+
+  # Warning message for newly found vessels
+  warning_log <- paste0(logs_dir, "/warning_", today_str, ".log")
+  msg <- paste0("ALERTA: Se han encontrado embarcaciones no registradas.\n",
+                "Se recomienda revisar la lista de embarcaciones activas en las subastas")
+  writeLines(msg, con = warning_log)    
   
   # Opcional: agregar temporalmente embarcaciones al dataset para evitar NAs
   new_entries <- data.frame(
@@ -190,16 +204,13 @@ if (length(non_matched) > 0) {
 
   # Log new species not present in the species list
   log_file <- paste0(logs_dir, "/unknown_species_", today_str, ".csv")
-  log_data <- data.frame(FECHA = Sys.Date(), NUEVA_ESPECIE = unmatched_names)
+  log_data <- data.frame(NUEVA_ESPECIE = unmatched_names)
   write.csv(log_data, log_file, row.names = FALSE)
   
   # Registrar mensaje de error crítico en un archivo
   error_log <- paste0(logs_dir, "/error_", today_str, ".log")
   msg <- paste0("ERROR CRÍTICO: Se han encontrado especies no registradas.\n",
-                "Revisa y actualiza el archivo 'sp.csv'.\n",
-                "Especies detectadas: ", 
-                paste(unmatched_names, collapse = ", "), "\n",
-                "Archivo de log: ", log_file, "\n")
+                "Revisa y actualiza el archivo 'sp.csv'.\n")
   writeLines(msg, con = error_log)
   
   stop("Se han encontrado especies no registradas. Verifica el log de errores.")

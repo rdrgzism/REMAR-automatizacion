@@ -29,6 +29,8 @@ library(lubridate)
 
 rm(list = ls())
 
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+
 # --- Folder paths
 # rdata_dir   <- "../../data/rdata"
 # tracks_dir  <- "../../../../05_CaixesVerdes"
@@ -37,13 +39,13 @@ rm(list = ls())
 # processed_dir <- "../../data/processed"
 # logs_dir <- "../../logs"
 
-setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
-rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
-tracks_dir <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/cajasverdes")
-shp_dir <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/shp")
-processed_dir  <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/processed")
-reference_dir  <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/reference")
-logs_dir       <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/logs")
+setwd(Sys.getenv("WORKING_DIR"))
+rdata_dir      <- Sys.getenv("RDATA_DIR")
+tracks_dir <- (Sys.getenv("TRACKS_DIR")
+shp_dir <- Sys.getenv("SHP_DIR")
+processed_dir  <- Sys.getenv("PROCESSED_DIR")
+reference_dir  <- Sys.getenv("REFERENCE_DIR")
+logs_dir       <- Sys.getenv("LOGS_DIR")
 
 # --- Load data
 if (file.exists(file.path(rdata_dir, "predicted.RData"))) {
@@ -58,7 +60,7 @@ if (file.exists(file.path(rdata_dir, "predicted.RData"))) {
 # ---------------------------------------
 
 # n_days = Sys.Date() - as.Date("2024-01-01"), para el análisis diario set a 1
-process_gps_data <- function(n_days = 562, tracks_dir, reference_dir, shp_dir,
+process_gps_data <- function(n_days = 5, tracks_dir, reference_dir, shp_dir,
                              logs_dir) {
   
   if (!dir.exists(shp_dir)) {
@@ -165,11 +167,12 @@ process_gps_data <- function(n_days = 562, tracks_dir, reference_dir, shp_dir,
   # }
   
   if (length(journeys_entries_in_port) > 0) {
-      write.csv(journeys_entries_in_port,
-                file.path(logs_dir,
-                          paste0("log_tracks_in_port_", today_str, ".csv")),
-                row.names = FALSE,
-                fileEncoding = "ISO-8859-1")
+    df_log <- data.frame(TRACK_ID = journeys_entries_in_port)
+    write.csv(df_log,
+              file.path(logs_dir,
+              paste0("log_tracks_in_port_", today_str, ".csv")),
+              row.names = FALSE,
+              fileEncoding = "ISO-8859-1")
   }
   
   # --- Remove inland points
@@ -196,7 +199,8 @@ process_gps_data <- function(n_days = 562, tracks_dir, reference_dir, shp_dir,
   # }
   
   if (length(journeys_entries_inland) > 0) {
-    write.csv(journeys_entries_inland,
+    df_log <- data.frame(TRACK_ID = journeys_entries_inland)
+    write.csv(df_log,
               file.path(logs_dir,
                         paste0("log_tracks_inland_", today_str, ".csv")),
               row.names = FALSE,
@@ -225,7 +229,8 @@ process_gps_data <- function(n_days = 562, tracks_dir, reference_dir, shp_dir,
   #             fileEncoding = "ISO-8859-1")
   
   if (length(journeys_few_bips) > 0) {
-    write.csv(journeys_few_bips,
+    df_log <- data.frame(TRACK_ID = journeys_few_bips)
+    write.csv(df_log,
               file.path(logs_dir,
                         paste0("log_few_bips_", today_str, ".csv")),
               row.names = FALSE,
