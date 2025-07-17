@@ -13,7 +13,7 @@
 # for a State Space Model (SSM). It links voyages with their GPS data,
 # interpolates tracks at regular intervals, and removes invalid regions.
 
-# Required Libraries
+# --- Libraries
 library(data.table)
 library(sf)
 library(dplyr)
@@ -22,106 +22,118 @@ library(stats)
 
 rm(list = ls())
 
-# --- Configuration ---
-metier_name <- "tresmall"        # Change to "jonquillo", "gerret", etc.
-period <- 4 * 60                 # Seconds between points: e.g. 2*60 for jonquillo
+# # --- Folder Paths ---
+setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
+rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
+shp_dir   <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/shp")
 
-# --- Folder Paths ---
-setwd("C:/Users/UIB/Desktop/REMAR-automatizacion/REMAR-automatizacion/scripts/r")
-rdata_dir <- "../../data/rdata"
-shp_morunas <- "../../data/shp/Morunas.shp"
+# rdata_dir <- "../.data./data/rdata"
+# shp_dir "../../../../shp" 
 
-# --- Load Data ---
-load(file.path(rdata_dir, paste0("raw_", metier_name, "_tracks.RData")))
-morunas <- st_read(shp_morunas, quiet = TRUE)
+# --- Configuration --
+metier_config <- list(
+  jonquillera = list(period = 2 * 60),
+  tresmall = list(period = 4 * 60)
+)
+metier_names <- names(metier_config)
 
-# --- Preprocess Tracks ---
-df_tracks$GPSDate <- as.Date(df_tracks$GPSDateTime)
-df_tracks$journey <- paste(df_tracks$GPSDate, df_tracks$VesselName, df_tracks$Cfr, sep = "//")
-
-# Sort by journey and time
-df_tracks <- df_tracks %>%
-  arrange(journey, GPSDateTime)
-
-# Calculate time differences and detect separate outings (sortidas)
-df_tracks <- df_tracks %>%
-  group_by(journey) %>%
-  mutate(time_diff = as.numeric(difftime(GPSDateTime, lag(GPSDateTime), units = "secs")),
-         sortida = cumsum(is.na(time_diff) | time_diff > 3600)) %>%
-  ungroup()
-
-# Filter tracks with at least 5 valid points
-valid_journeys <- df_tracks %>%
-  group_by(journey) %>%
-  summarise(n_points = n(), .groups = "drop") %>%
-  filter(n_points >= 5) %>%
-  pull(journey)
-
-data <- df_tracks %>%
-  filter(journey %in% valid_journeys)
-
-journey_list <- unique(data$journey)
-n_journeys <- length(journey_list)
-
-# --- Interpolation ---
-input <- data.frame()
-for(i in seq_along(journey_list)) {
-  journey_data <- data[data$journey == journey_list[i], ]
-  sortida_list <- unique(journey_data$sortida)
-
-  for (j in seq_along(sortida_list)) {
-    idx <- which(journey_data$sortida == sortida_list[j])
-    idx <- idx[order(journey_data$GPSDateTime[idx])]
-
-    # Check minimum valid points
-    if (length(idx) < 2 ||
-        sum(!is.na(journey_data$GPSDateTime[idx])) < 2 ||
-        sum(!is.na(journey_data$Y[idx])) < 2 ||
-        sum(!is.na(journey_data$X[idx])) < 2) {
-      next
-    }
-
-    # Generate regular time series
-    target <- seq(min(journey_data$GPSDateTime[idx]),
-                  max(journey_data$GPSDateTime[idx]),
-                  by = period)
-
-    y_hat <- approx(journey_data$GPSDateTime[idx], journey_data$Y[idx], xout = target)$y
-    x_hat <- approx(journey_data$GPSDateTime[idx], journey_data$X[idx], xout = target)$y
-
-    temp_df <- data.frame(
-      x = x_hat,
-      y = y_hat,
-      time = target,
-      state = "Transit",
-      journey = journey_list[i],
-      sortida = sortida_list[j]
-    )
-
-    input <- rbind(input, temp_df)
-  }
-}
-
-# --- Final Processing ---
-# Small jitter to avoid overlapping points
-input$x <- input$x + runif(nrow(input), -1, 1)
-input$y <- input$y + runif(nrow(input), -1, 1)
-
-# Convert to sf and remove points within "morunas"
-sf_input <- st_as_sf(input, coords = c("x", "y"), crs = 25831)
+# --- Load static shapefile ---
+morunas_path <- file.path(shp_dir, "Morunas.shp")
+morunas <- st_read(morunas_path, quiet = TRUE)
 morunas <- st_transform(morunas, crs = 25831)
 
-inside_morunas <- lengths(st_intersects(sf_input, morunas)) > 0
-sf_input <- sf_input[!inside_morunas, ]
+# --- Loop over metiers ---
+for (metier_name in metier_names) {
+  period <- metier_config[[metier_name]]$period
+  tracks_path <- file.path(
+    rdata_dir, paste0("raw_", metier_name, "_tracks.RData"))
+  # --- Load Data ---
+  if (file.exists(tracks_path)) {
+    load(tracks_path)         # OUT and journey_list
+  } else{
+    stop("El archivo '", tracks_path,"' no se encuentra en el directorio especificado.")
+  }
+  
+  # Ordenar y agrupar
+  data <- tracks %>%
+    arrange(journey, GPSDateTime) %>%
+    group_by(journey) %>%
+    mutate(time_diff = as.numeric(difftime(GPSDateTime, lag(GPSDateTime), units = "secs")),
+           sortida = cumsum(is.na(time_diff) | time_diff > 3600)) %>%
+    ungroup()
+  
+  journey_list <- unique(data$journey)
+  n_journeys <- length(journey_list)
+  
+  # --- Interpolación ---
+  input_list <- list()
+  counter <- 1
+  
+  for (i in seq_along(journey_list)) {
+    journey_data <- data[data$journey == journey_list[i], ]
+    sortida_list <- unique(journey_data$sortida)
+    
+    for (j in sortida_list) {
+      idx <- which(journey_data$sortida == j)
+      
+      x_vals <- journey_data$GPSDateTime[idx]
+      x_coords <- journey_data$X[idx]
+      y_coords <- journey_data$Y[idx]
+      
+      # Validación: mínimo dos valores únicos y no-NA en X e Y
+      if (length(idx) < 2 ||
+          sum(!is.na(x_vals)) < 2 ||
+          sum(!is.na(x_coords)) < 2 ||
+          sum(!is.na(y_coords)) < 2 ||
+          length(unique(x_vals[!is.na(x_vals)])) < 2) {
+        next
+      }
+      
+      target <- seq(min(x_vals, na.rm = TRUE), max(x_vals, na.rm = TRUE), by = period)
+      
+      x_hat <- approx(x_vals, x_coords, xout = target)$y
+      y_hat <- approx(x_vals, y_coords, xout = target)$y
+      
+      
+      temp_df <- data.frame(
+        x = x_hat,
+        y = y_hat,
+        time = target,
+        state = "Transit",
+        journey = journey_list[i],
+        sortida = j
+      )
+      
+      input_list[[counter]] <- temp_df
+      counter <- counter + 1
+    }
+  }
+  
+  input <- do.call(rbind, input_list)
+  if (nrow(input) == 0) {
+    warning(paste("No se generaron datos válidos para el metier:", metier_name))
+    next
+  }
+  
+  # --- Limpieza final ---
+  input$x <- input$x + runif(nrow(input), -1, 1)
+  input$y <- input$y + runif(nrow(input), -1, 1)
+  
+  sf_input <- st_as_sf(input, coords = c("x", "y"), crs = 25831)
+  inside_morunas <- lengths(st_intersects(sf_input, morunas)) > 0
+  sf_input <- sf_input[!inside_morunas, ]
+  
+  sf_input$X <- st_coordinates(sf_input)[, 1]
+  sf_input$Y <- st_coordinates(sf_input)[, 2]
+  input <- st_drop_geometry(sf_input)
+  
+  # --- Guardar ---
+  journey_list <- unique(input$journey)
+  
+  save(input, period, journey_list, n_journeys,
+       file = file.path(rdata_dir, paste0("input_", metier_name, ".RData")))
 
-# Extract coords and convert back to df
-sf_input$X <- st_coordinates(sf_input)[, 1]
-sf_input$Y <- st_coordinates(sf_input)[, 2]
-input <- st_drop_geometry(sf_input)
+  cat("Finalizado:", metier_name, "(", nrow(input), "puntos interpolados )\n\n")
+}
 
-# --- Save Output ---
-journey_list <- unique(input$journey)
-save(input, period, journey_list, n_journeys,
-     file = file.path(rdata_dir, paste0("input_", metier_name, ".RData")))
-
-cat("✅ Interpolation complete for metier:", metier_name, "\n")
+# save.image("SSM_input_check.RData")

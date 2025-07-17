@@ -1,0 +1,48 @@
+name: remar_autom
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # R base version
+  - r-base=4.3
+
+  # R packages  
+  - r-stringr
+  - r-dplyr
+  - r-data.table
+  - r-sf
+  - r-lubridate
+  - r-mldr
+  - r-posterior
+  - r-movehmm
+  - r-cmdstanr
+  - r-rweka
+  - r-rjava
+  - r-remotes
+  - r-plotly            # Extra dependecies for eRTG3D
+  - r-htmlwidgets
+
+  # Java support for RWeka  
+  - openjdk
+
+  # System tools needed to compile CmdStan
+  - make
+  - cmake
+  - gxx_linux-64
+
+  # Optional: for building and reading shapefiles with sf
+  - libgdal
+  - libzip
+  - sqlite
+
+  # Python version
+  - Python=3.11
+  - pip
+  - pip:
+      - pandas
+      - numpy
+      - scikit-learn
+
+
+

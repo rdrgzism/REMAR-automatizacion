@@ -2,7 +2,7 @@
 
 # ---------------------------------------
 # Estimating fishing effort for small-scale fisheries from vessel monitoring system
-#   Script 4/6 - Link classified fishing journeys to GPS tracks
+#   Script 3/6 - Link classified fishing journeys to GPS tracks
 # ---------------------------------------
 
 # Author: Ismael Rodríguez
@@ -30,93 +30,365 @@ library(lubridate)
 rm(list = ls())
 
 # --- Folder paths
-setwd("C:/Users/UIB/Desktop/REMAR-automatizacion/scripts/r")
-rdata_dir   <- "../../data/rdata"
-tracks_dir  <- "../../data/cajasverdes"
-shp_ports   <- "../../data/shp/Buffer_Puertos.shp"
+# rdata_dir   <- "../../data/rdata"
+# tracks_dir  <- "../../../../05_CaixesVerdes"
+# shp_dir     <- "../../../../shp"
+# reference_dir <- "../../data/reference"
+# processed_dir <- "../../data/processed"
+# logs_dir <- "../../logs"
+
+setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
+rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
+tracks_dir <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/cajasverdes")
+shp_dir <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/shp")
+processed_dir  <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/processed")
+reference_dir  <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/reference")
+logs_dir       <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/logs")
 
 # --- Load data
-load(file.path(rdata_dir, "predicted.RData"))
-ports <- st_read(shp_ports, quiet = TRUE)
-tracks_names <- list.files(tracks_dir)
+if (file.exists(file.path(rdata_dir, "predicted.RData"))) {
+  load(file.path(rdata_dir, "predicted.RData"))         # OUT and journey_list
+} else{
+  stop("El archivo 'predicted.RData' no se encuentra en el directorio especificado.")
+}
+
+# ---------------------------------------
+# FUNCTION TO CREATE THE GPS DATA SET &
+# Extract different metrics.
+# ---------------------------------------
+
+# n_days = Sys.Date() - as.Date("2024-01-01"), para el análisis diario set a 1
+process_gps_data <- function(n_days = 562, tracks_dir, reference_dir, shp_dir,
+                             logs_dir) {
+  
+  if (!dir.exists(shp_dir)) {
+    stop(paste("El directorio shp_dir no existe:", shp_dir))
+  }
+  
+  ports_path <- file.path(shp_dir, "BufferPuertos.shp")
+  inland_path <- file.path(shp_dir, "TierraMenos50m_4326.shp")
+  
+  if (!file.exists(ports_path)){
+    stop("No se encuentra el archivo de puertos: ", ports_path)
+  }
+  
+  if (!file.exists(inland_path)){
+    stop("No se encuentra el archivo de puertos: ", inland_path)
+  }
+  
+  ports  <- st_read(ports_path, quiet = TRUE)
+  inland <- st_read(inland_path, quiet = TRUE)
+  
+  if (!dir.exists(tracks_dir)) {
+    stop(paste("El directorio tracks_dir no existe:", tracks_dir))
+  }
+  
+  today_str <- format(Sys.Date(), "%Y-%m-%d")
+  start_year <- year(Sys.Date() - n_days)
+  current_year <- year(Sys.Date())
+  valid_years <- as.character(seq(start_year, current_year))
+  
+  all_subdirs <- list.dirs(tracks_dir, recursive = FALSE, full.names = TRUE)
+  subdirs <- all_subdirs[basename(all_subdirs) %in% valid_years]
+  
+  track_files <- unlist(lapply(subdirs, function(p) {
+    list.files(p, pattern = "\\.csv$", full.names = TRUE)
+  }))
+  
+  recent_files <- track_files[file.info(track_files)$mtime >= 
+                                Sys.Date() - n_days]
+  
+  if (length(recent_files) == 0) {
+    stop("No se encontraron archivos recientes en los últimos ", n_days, " días.")
+  }
+  
+  GPS_DATA <- rbindlist(lapply(track_files, function(file) {
+    fread(file,
+          select = c("Id", "Latitude", "Longitude", "Speed",
+                     "GPSDateTime", "VesselName", "Cfr"),
+          check.names = TRUE)
+  }), use.names = TRUE, fill = TRUE)
+  
+  # --- Basic filtering
+  # Remove rows with empty Cfr
+  GPS_DATA <- GPS_DATA[!(Cfr == ""), ]
+  # Convert to datetime
+  GPS_DATA[ , GPSDateTime := as.POSIXct(GPSDateTime,
+                                        format = "%Y-%m-%dT%H:%M:%SZ",
+                                        tz = "UTC")]
+  # Safety check
+  if (!"Cfr" %in% names(GPS_DATA)) stop("Missing 'Cfr' column in GPS data.")
+  # Remove rows with NAs
+  GPS_DATA <- GPS_DATA[complete.cases(GPS_DATA), ]
+  
+  # ---------------------------------------
+  # VESSEL NAMES: Normalize and match
+  # ---------------------------------------
+  # Load official list of boats
+  boats <- read.csv(file.path(reference_dir, "boats.csv"), 
+                    sep = ",", encoding = "latin1")
+  # Set boat names to normalized ones.
+  GPS_DATA$VesselName <- boats$NEMBARCACIONs[match(GPS_DATA$Cfr, boats$CFR)]
+  temp_na <- which(is.na(GPS_DATA$VesselName))
+  GPS_DATA <- GPS_DATA[-temp_na, ]
+  
+  GPS_DATA$journey <- paste(as.Date(GPS_DATA$GPSDateTime), "/", 
+                            GPS_DATA$VesselName, "/", GPS_DATA$Cfr)
+  journey_list <- unique(GPS_DATA$journey)
+  
+  # --- Convert to sf
+  sf_data <- st_as_sf(GPS_DATA,
+                      coords = c("Longitude", "Latitude"),
+                      crs = 4326)
+  
+  # --- Remove port points
+  port_mask <- lengths(st_intersects(sf_data, ports)) > 0
+  sf_data$inside_port <- port_mask
+  
+  journeys_entries_in_port <- sf_data %>%
+    st_drop_geometry() %>%
+    group_by(journey) %>%
+    summarise(all_in_port = all(inside_port)) %>%
+    filter(all_in_port) %>%
+    pull(journey)
+  
+  # sf_data_in_port <- sf_data %>%
+  #   filter(journey %in% journeys_entries_in_port)
+  # if (nrow(sf_data_in_port) > 0) {
+  #   
+  #   df_data_in_port <- sf_data_to_df(sf_data_in_port)
+  #   write.csv(df_data_in_port,
+  #             file.path(processed_dir,
+  #                       paste0("df_tracks_in_port_", today_str, ".csv")),
+  #             row.names = FALSE,
+  #             fileEncoding = "ISO-8859-1")
+  # }
+  
+  if (length(journeys_entries_in_port) > 0) {
+      write.csv(journeys_entries_in_port,
+                file.path(logs_dir,
+                          paste0("log_tracks_in_port_", today_str, ".csv")),
+                row.names = FALSE,
+                fileEncoding = "ISO-8859-1")
+  }
+  
+  # --- Remove inland points
+  inland_mask <- lengths(st_intersects(sf_data, inland)) > 0
+  sf_data$inland <- inland_mask
+  
+  journeys_entries_inland <- sf_data %>%
+    st_drop_geometry() %>%
+    group_by(journey) %>%
+    summarise(all_inland = all(inland)) %>%
+    filter(all_inland) %>%
+    pull(journey)
+  
+  # sf_data_inland <- sf_data %>%
+  #   filter(journey %in% journeys_entries_inland)
+  # 
+  # if (nrow(sf_data_inland) > 0) {
+  #   df_data_inland <- sf_data_to_df(sf_data_inland)
+  #   write.csv(df_data_inland,
+  #             file.path(processed_dir, 
+  #                       paste0("df_tracks_inland_", today_str, ".csv")),
+  #             row.names = FALSE,
+  #             fileEncoding = "ISO-8859-1")
+  # }
+  
+  if (length(journeys_entries_inland) > 0) {
+    write.csv(journeys_entries_inland,
+              file.path(logs_dir,
+                        paste0("log_tracks_inland_", today_str, ".csv")),
+              row.names = FALSE,
+              fileEncoding = "ISO-8859-1")
+  }
+  
+  sf_data_clean <- sf_data %>%
+    filter(!(journey %in% c(journeys_entries_in_port, journeys_entries_inland)))
+  
+  # --- Remove tracks with less than 4 entries
+  journeys_few_bips <- sf_data %>%
+    st_drop_geometry() %>%
+    count(journey) %>%
+    filter(n < 6) %>%
+    pull(journey)
+  
+  # sf_data_few_bips <- sf_data %>%
+  #   filter(journey %in% journeys_few_bips)
+  # 
+  # if (nrow(sf_data_few_bips) > 0) {
+  #   df_data_inland <- sf_data_to_df(sf_data_inland)
+  #   write.csv(sf_data_inland,
+  #             file.path(processed_dir,
+  #                       paste0("df_few_bips_", today_str, ".csv")),
+  #             row.names = FALSE,
+  #             fileEncoding = "ISO-8859-1")
+  
+  if (length(journeys_few_bips) > 0) {
+    write.csv(journeys_few_bips,
+              file.path(logs_dir,
+                        paste0("log_few_bips_", today_str, ".csv")),
+              row.names = FALSE,
+              fileEncoding = "ISO-8859-1")
+  }
+  
+  sf_data_clean <- sf_data_clean %>%
+    filter(!(journey %in% journeys_few_bips))
+  
+  df_data <- sf_data_to_df(sf_data_clean)
+  return(df_data)
+}
+
+# ---------------------------------------
+# FUNCTION THAT UNFOLDS POINT GEOMETRIES TO DATA FRAME 
+#   Includes columns (Lon, Lat) for crs = 4326 &
+#   columns (X, Y) for crs = 25831
+# ---------------------------------------
+
+sf_data_to_df <- function(sf_data, df_data = NULL) {
+  
+  if (!inherits(sf_data, "sf")) {
+    stop("El objeto proporcionado no es un 'sf'.")
+  }
+  
+  geom_type <- unique(sf::st_geometry_type(sf_data))
+  if (!all(geom_type %in% c("POINT", "MultiPoint"))) {
+    stop('Las geometrías deben ser de tipo "POINT" o "MultiPoint".')
+  }
+  
+  sf_data$Lon <- sf::st_coordinates(sf_data)[ , 1]
+  sf_data$Lat <- sf::st_coordinates(sf_data)[ , 2]
+  
+  sf_data_25831 <- sf::st_transform(sf_data, crs = 25831)
+  sf_data$X <- sf::st_coordinates(sf_data_25831)[ , 1]
+  sf_data$Y <- sf::st_coordinates(sf_data_25831)[ , 2]
+  
+  sf_data_df <- sf::st_drop_geometry(sf_data)
+  
+  return(sf_data_df)
+}
+
 
 # ---------------------------------------
 # FUNCTION TO PROCESS TRACKS
 # ---------------------------------------
-process_tracks <- function(journey_vector, output_filename) {
-  df_tracks <- data.frame()
-  na_control <- data.frame()
-  duplicated_bips <- data.frame()
-  boats_no_track <- character()
-  less_than_n_bips <- character()
 
-  for(i in seq_along(journey_vector)) {
-    # Parse journey into components
-    temp <- unlist(strsplit(journey_vector[i], " / "))
+process_tracks <- function(journey_vector, df_data, output_filename) {
+  
+  if (inherits(df_data, "sf")) {
+    df_data <- sf_data_to_df(df_data)
+  }
+  
+  required_cols <- c("journey", "GPSDateTime", "Cfr", "Lon", "Lat")
+  missing_cols <- setdiff(required_cols, names(df_data))
+  if (length(missing_cols) > 0) {
+    stop(paste("Faltan columnas necesarias en df_data:",
+               paste(missing_cols,
+                     collapse = ", ")))
+  }
+  
+  # Lista para acumular datasets válidos
+  list_tracks <- list()
+  duplicated_log <- data.frame()
+  
+  for (i in seq_along(journey_vector)) {
+    journey_id <- journey_vector[i]
+    
+    # Separar componentes del journey
+    temp <- unlist(strsplit(journey_id, " / "))
     track_day <- as.Date(temp[1]) - 1
     cfr <- temp[3]
-
-    track_file_name <- paste0("Daily_", gsub("-", "", as.character(track_day)), ".csv")
-    match_file <- tracks_names[tracks_names == track_file_name]
-
-    if(length(match_file) == 1){
-      dataset <- fread(file.path(tracks_dir, match_file), check.names = TRUE)
-      dataset <- dataset[dataset$Cfr == cfr, ]
-
-      if(nrow(dataset) > 0){
-        dataset <- dataset[, .(Id, Latitude, Longitude, Speed, GPSDateTime, VesselName, Cfr)]
-        dataset$GPSDateTime <- as.POSIXct(dataset$GPSDateTime, format="%Y-%m-%dT%H:%M:%SZ", tz="UTC")
-
-        if(anyNA(dataset)){
-          na_control <- rbind(na_control, dataset[!complete.cases(dataset), ])
-          dataset <- dataset[complete.cases(dataset), ]
-        }
-
-        # Remove port points
-        sf_data <- st_as_sf(dataset, coords = c("Longitude", "Latitude"), crs = 4326)
-        inside_port <- lengths(st_intersects(sf_data, ports)) > 0
-        sf_data <- sf_data[!inside_port, ]
-
-        sf_data$Lon <- st_coordinates(sf_data)[, 1]
-        sf_data$Lat <- st_coordinates(sf_data)[, 2]
-        sf_data_25831 <- st_transform(sf_data, crs = 25831)
-        sf_data$X <- st_coordinates(sf_data_25831)[, 1]
-        sf_data$Y <- st_coordinates(sf_data_25831)[, 2]
-
-        dataset <- st_drop_geometry(sf_data)
-
-        if(nrow(dataset) > 2){
-          duplicated_idx <- duplicated(dataset$GPSDateTime)
-          if(any(duplicated_idx)){
-            duplicated_bips <- rbind(duplicated_bips, dataset[duplicated_idx, ])
-            dataset <- dataset[!duplicated_idx, ]
-          }
-
-          df_tracks <- rbind(df_tracks, dataset)
-        } else {
-          less_than_n_bips <- c(less_than_n_bips, journey_vector[i])
-        }
-
-      } else {
-        boats_no_track <- c(boats_no_track, journey_vector[i])
-      }
+    
+    # Extraer datos del journey actual
+    dataset <- df_data %>% 
+      filter(journey == journey_id)
+    
+    if (nrow(dataset) == 0) {
+      next
     }
+    
+    # Verificar duplicados (en base a columnas clave)
+    duplicated_logical <- duplicated(dataset[, .(GPSDateTime, Cfr, Lon, Lat)])
+    
+    # Guardar duplicados si existen
+    if (any(duplicated_logical)) {
+      duplicated_rows <- dataset[duplicated_logical]
+      duplicated_log <- rbind(duplicated_log,
+                              duplicated_rows %>% 
+                                mutate(reason = "duplicated bip"))
+    }
+    
+    # Eliminar duplicados del dataset
+    dataset <- dataset[!duplicated_logical]
+    
+    list_tracks[[length(list_tracks) + 1]] <- dataset
   }
-
-  save(df_tracks, file = file.path(rdata_dir, output_filename))
-
-  # Optionally, write logs
-  # today <- format(Sys.Date(), "%Y-%m-%d")
-  # write.csv(na_control, file.path("../../logs", paste0("na_control_", today, ".csv")), row.names = FALSE)
-  # write.csv(duplicated_bips, file.path("../../logs", paste0("duplicated_bips_", today, ".csv")), row.names = FALSE)
-  # writeLines(boats_no_track, file.path("../../logs", paste0("boats_no_track_", today, ".txt")))
-  # writeLines(less_than_n_bips, file.path("../../logs", paste0("less_than_n_bips_", today, ".txt")))
+  
+  # Combinar todos los tracks procesados
+  if (length(list_tracks) == 0) {
+    warning("No se encontró ningún track válido.")
+    df_tracks <- data.frame()
+  } else {
+    df_tracks <- do.call(rbind, list_tracks)
+  }
+  
+  # Guardar los resultados
+  return(df_tracks)
 }
 
-# --- Process jonquillo journeys
-process_tracks(journey_jonquillo, "raw_jonquillo_tracks.RData")
+df_data <- process_gps_data(n_days = 400, 
+                            tracks_dir = tracks_dir,
+                            shp_dir = shp_dir,
+                            reference_dir = reference_dir,
+                            logs_dir = logs_dir)
 
-# --- Process tresmall journeys
-process_tracks(journey_tresmall, "raw_tresmall_tracks.RData")
+metiers <- c("jonquillera", "tresmall", "palangre", "nasa", "cercol", "llampuguera")
+list_metier_tracks <- list()
+for (metier in metiers) {
+  journey_var <- get(paste0("journey_", metier))
+  filename <- paste0("raw_", metier, "_tracks.RData")
+  tracks <- process_tracks(journey_var, df_data, filename)
+  list_metier_tracks[[metier]] <- tracks
+  
+  if (nrow(tracks) > 0) {
+    filename <- paste0("raw_", metier, "_tracks.RData")
+    save(tracks, file = file.path(rdata_dir, filename))
+  } else {
+    message("No se guardó", metier, "porque el dataset está vacío.")
+  }
+}
 
-cat("✅ Track linking process completed successfully.\n")
+cat("Track linking process completed successfully.\n")
+
+report_path <- file.path(logs_dir, paste0("reporte_summary_", today_str, ".txt"))
+sink(report_path)
+
+cat("Resumen del procesamiento de tracks GPS\n")
+cat("----------------------------------------\n")
+cat("Fecha del análisis: ", today_str, "\n\n")
+
+cat("1. Tracks enteramente en puerto:\n")
+if (exists("journeys_entries_in_port") && length(journeys_entries_in_port) > 0) {
+  print(journeys_entries_in_port)
+} else {
+  cat("  Ninguno.\n")
+}
+
+cat("\n2. Tracks enteramente en tierra:\n")
+if (exists("journeys_entries_inland") && length(journeys_entries_inland) > 0) {
+  print(journeys_entries_inland)
+} else {
+  cat("  Ninguno.\n")
+}
+
+cat("\n3. Tracks con menos de 6 puntos:\n")
+if (exists("journeys_few_bips") && length(journeys_few_bips) > 0) {
+  print(journeys_few_bips)
+} else {
+  cat("  Ninguno.\n")
+}
+
+sink()
+
+
+# save.image("historico_predicted_gps.RData")

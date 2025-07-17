@@ -2,7 +2,7 @@
 
 # ---------------------------------------
 # Estimating fishing effort for small-scale fisheries from vessel monitoring system
-#   Script 3/6 - Métier classification from species composition
+#   Script 2/6 - Métier classification from species composition
 # ---------------------------------------
 
 # Author: Miquel Palmer Vidal
@@ -10,20 +10,19 @@
 # Date: 2025-04-30
 
 # OBJECTIVE:
-# Predict the most probable fishing métier for each voyage, using species composition.
+# Predict the most probable fishing metier for each voyage, using species composition.
 # The classification is based on a sequential model with:
 #   - 5 binary classifiers (k-means + PCA or CA)
-#   - 1 multilabel classifier for distinguishing "tresmall" vs "palangre"
+#   - 1 multi-label classifier to distinguish "tresmall" from "palangre"
 
 # INPUT:
-# - OUT: matrix of species weights [voyage x species]
-# - journey_list: vector of unique voyage identifiers
-# - classifiers: list of pretrained classifier parameters (from classificadors.RData)
+# - OUT: matrix of landed weights [voyage x species]
+# - journey_list: vector of unique fishing trip identifiers
+# - classifiers: list of predefined classifier parameters
 
 # OUTPUT:
 # - predicted.RData:
-#   > OUT_jonquillo, journey_jonquillo
-#   > OUT_tresmall, journey_tresmall
+#   > OUT_<metier>, journey_<metier>
 
 # --- Libraries
 library(mldr)
@@ -32,48 +31,63 @@ library(RWeka)
 rm(list = ls())
 
 # --- Folder paths
-setwd("C:/Users/UIB/Desktop/REMAR-automatizacion/scripts/r")
-input_dir     <- "../../data/ventaslonja"
-rdata_dir     <- "../../data/rdata"
-processed_dir <- "../../data/processed"
-reference_dir <- "../../data/reference"
+# rdata_dir     <- "../../data/rdata"
+# processed_dir <- "../../data/processed"
 
-# --- Load cleaned sales and classifiers
-load(file.path(rdata_dir, "sample.RData"))         # OUT and journey_list
-load(file.path(rdata_dir, "classificadors.RData")) # classifiers list
+setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
+rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
 
-OUT <- data.frame(OUT)  # Ensure data frame format
+# --- Utility function to extract output per metier
+extract_metier <- function(name, results, OUT, journey_list) {
+  idx <- which(results$class == name)
+  list(
+    OUT = OUT[idx, , drop = FALSE],
+    journey = journey_list[idx]
+  )
+}
+
+if (file.exists(file.path(rdata_dir, "sample.RData"))) {
+  load(file.path(rdata_dir, "sample.RData"))         # OUT and journey_list
+} else{
+  stop("El archivo 'sample.RData' no se encuentra en el directorio especificado.")
+}
+
+# --- Load cleaned data and classifier models
+load(file.path(rdata_dir, "classificadors.RData"))      # classifiers list
+
+if (!is.data.frame(OUT)) OUT <- as.data.frame(OUT)  # Ensure data.frame format
 results <- list()
 results$class <- rep(NA, length(journey_list))
 
 # ---------------------------------------
-# CLASSIFICATION LOOP
+# CLASSIFICATION LOOP with Progress Bar
 # ---------------------------------------
 
-# For each voyage, apply classifiers sequentially
+pb <- txtProgressBar(min = 0, max = length(journey_list), style = 3)
+
+# Apply classifiers sequentially to each fishing trip
 for (i in seq_along(journey_list)) {
   sample <- OUT[i, ]
   classified <- FALSE
-
+  
   for (class_name in names(classifiers)) {
     clf <- classifiers[[class_name]]
-
-    # Select only columns corresponding to classifier species
-    temp_names <- make.names(colnames(sample), unique = TRUE)
-    selected_species <- which(temp_names %in% clf$sp.names)
+    
+    # Select only species used by the current classifier
+    selected_species <- which(names(sample) %in% clf$sp.names)
     new <- sample[selected_species]
-
-    # Apply classification
+    
+    # Apply classification function
     label <- classification.function(
-      sp.names   = clf$sp.names,
-      new        = new,
-      pca        = clf$pca,
-      n.axes     = clf$n.axes,
-      sco.names  = clf$sco.names,
-      classifier = clf$classifier
+    sp.names   = clf$sp.names,
+    new        = new,
+    pca        = clf$pca,
+    n.axes     = clf$n.axes,
+    sco.names  = clf$sco.names,
+    classifier = clf$classifier
     )
-
-    # Check label and store classification
+    
+    # Store classification and break if a label is assigned
     if (label == "1") {
       results$class[i] <- class_name
       classified <- TRUE
@@ -88,28 +102,30 @@ for (i in seq_along(journey_list)) {
       break
     }
   }
+  
+  setTxtProgressBar(pb, i)
 }
+
+close(pb)
 
 # ---------------------------------------
 # SPLIT RESULTS BY METIER
 # ---------------------------------------
 
-# Jonquillera
-idx_jonquillo <- which(results$class == "jonquillera")
-OUT_jonquillo <- OUT[idx_jonquillo, , drop = FALSE]
-journey_jonquillo <- journey_list[idx_jonquillo]
-
-# Tresmall
-idx_tresmall <- which(results$class == "tresmall")
-OUT_tresmall <- OUT[idx_tresmall, , drop = FALSE]
-journey_tresmall <- journey_list[idx_tresmall]
+metiers <- c("jonquillera", "tresmall", "palangre", "nasa", "cercol", "llampuguera")
+for (metier in metiers) {
+  res <- extract_metier(metier, results, OUT, journey_list)
+  assign(paste0("OUT_", metier), res$OUT)
+  assign(paste0("journey_", metier), res$journey)
+}
 
 # ---------------------------------------
 # SAVE CLASSIFIED OUTPUTS
 # ---------------------------------------
 
-save(
-  OUT_jonquillo, journey_jonquillo,
-  OUT_tresmall, journey_tresmall,
-  file = file.path(rdata_dir, "predicted.RData")
-)
+save_list <- list(results = results)
+for (metier in metiers) {
+  save_list[[paste0("OUT_", metier)]] <- get(paste0("OUT_", metier))
+  save_list[[paste0("journey_", metier)]] <- get(paste0("journey_", metier))
+}
+save(list = names(save_list), file = file.path(rdata_dir, "predicted.RData"))
