@@ -285,7 +285,6 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
     df_data <- sf_data_to_df(df_data)
   }
   
-  journey_vector <- journey_jonquillera
   required_cols <- c("journey", "GPSDateTime", "Cfr", "Lon", "Lat", 
                      "inside_port", "inland")
   missing_cols <- setdiff(required_cols, names(df_data))
@@ -377,7 +376,7 @@ for (metier in metiers) {
 
 tracks_processed <- rbindlist(list_metier_tracks)
 journey_combinado <- c(journey_jonquillera, journey_tresmall)
-tracks_jonquillera <- list_metier_tracks[[jonquillera]]
+tracks_jonquillera <- list_metier_tracks[["jonquillera"]]
 tracks_tresmall <- list_metier_tracks[[tresmall]]
 
 journey_track_jonquillera <- unique(tracks_jonquillera$journey)
