@@ -22,7 +22,7 @@
 # - raw_tresmall_tracks.RData
 
 # --- Load libraries
-library(dotenv)
+# library(dotenv)
 library(data.table)
 library(sf)
 library(dplyr)
@@ -30,23 +30,23 @@ library(lubridate)
 
 rm(list = ls())
 
-load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
-
 # --- Folder paths
-# rdata_dir   <- "../../data/rdata"
-# tracks_dir  <- "../../../../05_CaixesVerdes"
-# shp_dir     <- "../../../../shp"
-# reference_dir <- "../../data/reference"
-# processed_dir <- "../../data/processed"
-# logs_dir <- "../../logs"
+# setwd("C:/Users/Usuario/Desktop/REMAR/REMAR-automatizacion/scripts/r")
+rdata_dir   <- "../../data/rdata"
+tracks_dir <- "C:/Users/Usuario/OneDrive - Universitat de les Illes Balears/Archivos de Bernat Morro Cortès - REMAR (REcursos MARins pesquers a Balears)/P. artesanal/05_CaixesVerdes"
+shp_dir     <- "../../data/shp"
+reference_dir <- "../../data/reference"
+processed_dir <- "../../data/processed"
+logs_dir <- "../../logs"
 
-setwd(Sys.getenv("WORKING_DIR"))
-rdata_dir      <- Sys.getenv("RDATA_DIR")
-tracks_dir <- Sys.getenv("TRACKS_DIR")
-shp_dir <- Sys.getenv("SHP_DIR")
-processed_dir  <- Sys.getenv("PROCESSED_DIR")
-reference_dir  <- Sys.getenv("REFERENCE_DIR")
-logs_dir       <- Sys.getenv("LOGS_DIR")
+# load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+# setwd(Sys.getenv("WORKING_DIR"))
+# rdata_dir      <- Sys.getenv("RDATA_DIR")
+# tracks_dir <- Sys.getenv("TRACKS_DIR")
+# shp_dir <- Sys.getenv("SHP_DIR")
+# processed_dir  <- Sys.getenv("PROCESSED_DIR")
+# reference_dir  <- Sys.getenv("REFERENCE_DIR")
+# logs_dir       <- Sys.getenv("LOGS_DIR")
 
 # --- Load data
 if (file.exists(file.path(rdata_dir, "predicted.RData"))) {
@@ -284,8 +284,10 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
   if (inherits(df_data, "sf")) {
     df_data <- sf_data_to_df(df_data)
   }
-  
-  required_cols <- c("journey", "GPSDateTime", "Cfr", "Lon", "Lat")
+  df_data <- df_data2
+  journey_vector <- journey_jonquillera
+  required_cols <- c("journey", "GPSDateTime", "Cfr", "Lon", "Lat", 
+                     "inside_port", "inland")
   missing_cols <- setdiff(required_cols, names(df_data))
   if (length(missing_cols) > 0) {
     stop(paste("Faltan columnas necesarias en df_data:",
@@ -336,7 +338,7 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
     
     list_tracks[[length(list_tracks) + 1]] <- dataset
   }
-  
+
   # Combinar todos los tracks procesados
   if (length(list_tracks) == 0) {
     warning("No se encontró ningún track válido.")
@@ -355,6 +357,9 @@ df_data <- process_gps_data(n_days = 400,
                             reference_dir = reference_dir,
                             logs_dir = logs_dir)
 
+# save.image("df_data_check.RData")
+# load("df_data_check.RData")
+
 metiers <- c("jonquillera", "tresmall", "palangre", "nasa", "cercol", "llampuguera")
 list_metier_tracks <- list()
 for (metier in metiers) {
@@ -369,11 +374,26 @@ for (metier in metiers) {
   } else {
     message("No se guardó", metier, "porque el dataset está vacío.")
   }
+  
+  tracks_processed <- rbindlist(list_metier_tracks)
 }
 
+rm(list = ls())
+load("df_data_check.RData")
+load(file.path(paste0(rdata_dir,"/raw_jonquillera_tracks.RData")))
+tracks_jonquillera <- tracks
+load(file.path(paste0(rdata_dir,"/raw_tresmall_tracks.RData")))
+tracks_tresmall <- tracks
 
+journey_combinado <- c(journey_jonquillera, journey_tresmall)
+
+
+journey_track_jonquillera <- unique(tracks_jonquillera$journey)
+journey_track_tresmall <- unique(tracks_tresmall$journey)
+gps_journey <- c(journey_track_jonquillera, journey_track_tresmall)
 # --- CALCULO DE METRICAS ---
 # --- Extraer fechas únicas
+
 venta_fechas <- as.Date(sapply(strsplit(journey_combinado, " / "), `[`, 1))
 gps_fechas   <- as.Date(sapply(strsplit(gps_journey, " / "), `[`, 1))
 
@@ -387,6 +407,7 @@ ventas_sin_salida_df <- data.frame()
 today_str <- format(Sys.Date(), "%Y-%m-%d")
 # --- Bucle por cada fecha de venta
 for (dia in fechas_venta) {
+  dia <- as.Date(dia)
   dia_gps <- dia - 1
 
   # CFRs con venta el día actual
