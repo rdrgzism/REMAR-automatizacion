@@ -377,7 +377,7 @@ for (metier in metiers) {
 tracks_processed <- rbindlist(list_metier_tracks)
 journey_combinado <- c(journey_jonquillera, journey_tresmall)
 tracks_jonquillera <- list_metier_tracks[["jonquillera"]]
-tracks_tresmall <- list_metier_tracks[[tresmall]]
+tracks_tresmall <- list_metier_tracks[["tresmall"]]
 
 journey_track_jonquillera <- unique(tracks_jonquillera$journey)
 journey_track_tresmall <- unique(tracks_tresmall$journey)
