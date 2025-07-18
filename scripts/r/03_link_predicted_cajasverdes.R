@@ -369,22 +369,13 @@ for (metier in metiers) {
   list_metier_tracks[[metier]] <- tracks
   
   if (nrow(tracks) > 0) {
-    filename <- paste0("raw_", metier, "_tracks.RData")
     save(tracks, file = file.path(rdata_dir, filename))
   } else {
-    message("No se guardó", metier, "porque el dataset está vacío.")
+    message(paste("No se guardó", metier, "porque el dataset está vacío."))
   }
-  
-  tracks_processed <- rbindlist(list_metier_tracks)
 }
 
-rm(list = ls())
-load("df_data_check.RData")
-load(file.path(paste0(rdata_dir,"/raw_jonquillera_tracks.RData")))
-tracks_jonquillera <- tracks
-load(file.path(paste0(rdata_dir,"/raw_tresmall_tracks.RData")))
-tracks_tresmall <- tracks
-
+tracks_processed <- rbindlist(list_metier_tracks)
 journey_combinado <- c(journey_jonquillera, journey_tresmall)
 
 
@@ -424,19 +415,25 @@ for (dia in fechas_venta) {
 
   # --- Almacenar resultados
   if (length(salida_sin_venta) > 0) {
+    salidas_sin_venta_file <- paste0(rdata_dir, "salida_sin_venta_", today_str, ".csv")
     salidas_sin_venta_df <- rbind(
       salidas_sin_venta_df,
       data.frame(fecha = as.character(dia_gps), tipo = "sin_venta", cfr = salida_sin_venta)
     )
   }
-
   if (length(venta_sin_salida) > 0) {
+    ventas_sin_salida_file <- paste0(rdata_dir, "ventas_sin_salida_", today_str, ".csv")
     ventas_sin_salida_df <- rbind(
       ventas_sin_salida_df,
       data.frame(fecha = as.character(dia), tipo = "sin_salida", cfr = venta_sin_salida)
     )
   }
 }
+
+write.csv(salidas_sin_venta_df, salidas_sin_venta_file, row.names = FALSE,
+          fileEncoding = "ISO-8859-1")
+write.csv(ventas_sin_salida_df, ventas_sin_salida_file, row.names = FALSE,
+          fileEncoding = "ISO-8859-1")
 
 cat("Track linking process completed successfully.\n")
 
