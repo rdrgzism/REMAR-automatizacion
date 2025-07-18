@@ -22,6 +22,7 @@
 # - raw_tresmall_tracks.RData
 
 # --- Load libraries
+library(dotenv)
 library(data.table)
 library(sf)
 library(dplyr)
@@ -41,7 +42,7 @@ load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 
 setwd(Sys.getenv("WORKING_DIR"))
 rdata_dir      <- Sys.getenv("RDATA_DIR")
-tracks_dir <- (Sys.getenv("TRACKS_DIR")
+tracks_dir <- Sys.getenv("TRACKS_DIR")
 shp_dir <- Sys.getenv("SHP_DIR")
 processed_dir  <- Sys.getenv("PROCESSED_DIR")
 reference_dir  <- Sys.getenv("REFERENCE_DIR")
@@ -60,7 +61,7 @@ if (file.exists(file.path(rdata_dir, "predicted.RData"))) {
 # ---------------------------------------
 
 # n_days = Sys.Date() - as.Date("2024-01-01"), para el análisis diario set a 1
-process_gps_data <- function(n_days = 5, tracks_dir, reference_dir, shp_dir,
+process_gps_data <- function(n_days = 564, tracks_dir, reference_dir, shp_dir,
                              logs_dir) {
   
   if (!dir.exists(shp_dir)) {
@@ -292,6 +293,7 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
                      collapse = ", ")))
   }
   
+  today_str <- format(Sys.Date(), "%Y-%m-%d")
   # Lista para acumular datasets válidos
   list_tracks <- list()
   duplicated_log <- data.frame()
@@ -302,11 +304,14 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
     # Separar componentes del journey
     temp <- unlist(strsplit(journey_id, " / "))
     track_day <- as.Date(temp[1]) - 1
+    vesselName <- temp[2]
     cfr <- temp[3]
     
     # Extraer datos del journey actual
     dataset <- df_data %>% 
-      filter(journey == journey_id)
+      filter(VesselName == vesselName,
+             Cfr == cfr,
+             as.Date(GPSDateTime) == track_day)
     
     if (nrow(dataset) == 0) {
       next
@@ -317,10 +322,13 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
     
     # Guardar duplicados si existen
     if (any(duplicated_logical)) {
+      duplicated_file <- paste0(rdata_dir, "duplicated_bips_", today_str, ".csv")
       duplicated_rows <- dataset[duplicated_logical]
       duplicated_log <- rbind(duplicated_log,
                               duplicated_rows %>% 
                                 mutate(reason = "duplicated bip"))
+      write.csv(duplicated_log, duplicated_file, row.names = FALSE,
+                fileEncoding = "ISO-8859-1")
     }
     
     # Eliminar duplicados del dataset
@@ -363,37 +371,52 @@ for (metier in metiers) {
   }
 }
 
+
+# --- CALCULO DE METRICAS ---
+# --- Extraer fechas únicas
+venta_fechas <- as.Date(sapply(strsplit(journey_combinado, " / "), `[`, 1))
+gps_fechas   <- as.Date(sapply(strsplit(gps_journey, " / "), `[`, 1))
+
+fechas_venta <- sort(unique(venta_fechas))
+fechas_gps   <- sort(unique(gps_fechas))
+
+# --- Inicializar data.frames para guardar métricas
+salidas_sin_venta_df <- data.frame()
+ventas_sin_salida_df <- data.frame()
+
+today_str <- format(Sys.Date(), "%Y-%m-%d")
+# --- Bucle por cada fecha de venta
+for (dia in fechas_venta) {
+  dia_gps <- dia - 1
+
+  # CFRs con venta el día actual
+  ventas_dia <- journey_combinado[venta_fechas == dia]
+  ventas_cfrs <- unique(sapply(strsplit(ventas_dia, " / "), function(x) x[3]))
+
+  # CFRs con GPS el día anterior
+  gps_dia <- gps_journey[gps_fechas == dia_gps]
+  gps_cfrs <- unique(sapply(strsplit(gps_dia, " / "), function(x) x[3]))
+
+  # --- Comparar
+  salida_sin_venta <- setdiff(gps_cfrs, ventas_cfrs)
+  venta_sin_salida <- setdiff(ventas_cfrs, gps_cfrs)
+
+  # --- Almacenar resultados
+  if (length(salida_sin_venta) > 0) {
+    salidas_sin_venta_df <- rbind(
+      salidas_sin_venta_df,
+      data.frame(fecha = as.character(dia_gps), tipo = "sin_venta", cfr = salida_sin_venta)
+    )
+  }
+
+  if (length(venta_sin_salida) > 0) {
+    ventas_sin_salida_df <- rbind(
+      ventas_sin_salida_df,
+      data.frame(fecha = as.character(dia), tipo = "sin_salida", cfr = venta_sin_salida)
+    )
+  }
+}
+
 cat("Track linking process completed successfully.\n")
-
-report_path <- file.path(logs_dir, paste0("reporte_summary_", today_str, ".txt"))
-sink(report_path)
-
-cat("Resumen del procesamiento de tracks GPS\n")
-cat("----------------------------------------\n")
-cat("Fecha del análisis: ", today_str, "\n\n")
-
-cat("1. Tracks enteramente en puerto:\n")
-if (exists("journeys_entries_in_port") && length(journeys_entries_in_port) > 0) {
-  print(journeys_entries_in_port)
-} else {
-  cat("  Ninguno.\n")
-}
-
-cat("\n2. Tracks enteramente en tierra:\n")
-if (exists("journeys_entries_inland") && length(journeys_entries_inland) > 0) {
-  print(journeys_entries_inland)
-} else {
-  cat("  Ninguno.\n")
-}
-
-cat("\n3. Tracks con menos de 6 puntos:\n")
-if (exists("journeys_few_bips") && length(journeys_few_bips) > 0) {
-  print(journeys_few_bips)
-} else {
-  cat("  Ninguno.\n")
-}
-
-sink()
-
 
 # save.image("historico_predicted_gps.RData")

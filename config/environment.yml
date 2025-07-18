@@ -20,6 +20,8 @@ dependencies:
   - r-rweka
   - r-rjava
   - r-remotes
+  - r-languageserver
+  - r-dotenv
   - r-plotly            # Extra dependecies for eRTG3D
   - r-htmlwidgets
 
