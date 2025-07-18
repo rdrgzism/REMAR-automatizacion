@@ -284,7 +284,7 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
   if (inherits(df_data, "sf")) {
     df_data <- sf_data_to_df(df_data)
   }
-  df_data <- df_data2
+  
   journey_vector <- journey_jonquillera
   required_cols <- c("journey", "GPSDateTime", "Cfr", "Lon", "Lat", 
                      "inside_port", "inland")
@@ -381,7 +381,7 @@ journey_combinado <- c(journey_jonquillera, journey_tresmall)
 
 journey_track_jonquillera <- unique(tracks_jonquillera$journey)
 journey_track_tresmall <- unique(tracks_tresmall$journey)
-gps_journey <- c(journey_track_jonquillera, journey_track_tresmall)
+gps_journey <- unique(journey_combinado$journey)
 # --- CALCULO DE METRICAS ---
 # --- Extraer fechas únicas
 
@@ -397,6 +397,8 @@ ventas_sin_salida_df <- data.frame()
 
 today_str <- format(Sys.Date(), "%Y-%m-%d")
 # --- Bucle por cada fecha de venta
+salidas_sin_venta_file <- paste0(rdata_dir, "salida_sin_venta_", today_str, ".csv")
+ventas_sin_salida_file <- paste0(rdata_dir, "ventas_sin_salida_", today_str, ".csv")
 for (dia in fechas_venta) {
   dia <- as.Date(dia)
   dia_gps <- dia - 1
@@ -415,14 +417,12 @@ for (dia in fechas_venta) {
 
   # --- Almacenar resultados
   if (length(salida_sin_venta) > 0) {
-    salidas_sin_venta_file <- paste0(rdata_dir, "salida_sin_venta_", today_str, ".csv")
     salidas_sin_venta_df <- rbind(
       salidas_sin_venta_df,
       data.frame(fecha = as.character(dia_gps), tipo = "sin_venta", cfr = salida_sin_venta)
     )
   }
   if (length(venta_sin_salida) > 0) {
-    ventas_sin_salida_file <- paste0(rdata_dir, "ventas_sin_salida_", today_str, ".csv")
     ventas_sin_salida_df <- rbind(
       ventas_sin_salida_df,
       data.frame(fecha = as.character(dia), tipo = "sin_salida", cfr = venta_sin_salida)
