@@ -22,7 +22,7 @@
 # - raw_tresmall_tracks.RData
 
 # --- Load libraries
-# library(dotenv)
+library(dotenv)
 library(data.table)
 library(sf)
 library(dplyr)
@@ -32,21 +32,21 @@ rm(list = ls())
 
 # --- Folder paths
 # setwd("C:/Users/Usuario/Desktop/REMAR/REMAR-automatizacion/scripts/r")
-rdata_dir   <- "../../data/rdata"
-tracks_dir <- "C:/Users/Usuario/OneDrive - Universitat de les Illes Balears/Archivos de Bernat Morro Cortès - REMAR (REcursos MARins pesquers a Balears)/P. artesanal/05_CaixesVerdes"
-shp_dir     <- "../../data/shp"
-reference_dir <- "../../data/reference"
-processed_dir <- "../../data/processed"
-logs_dir <- "../../logs"
+# rdata_dir   <- "../../data/rdata"
+# tracks_dir <- "C:/Users/Usuario/OneDrive - Universitat de les Illes Balears/Archivos de Bernat Morro Cortès - REMAR (REcursos MARins pesquers a Balears)/P. artesanal/05_CaixesVerdes"
+# shp_dir     <- "../../data/shp"
+# reference_dir <- "../../data/reference"
+# processed_dir <- "../../data/processed"
+# logs_dir <- "../../logs"
 
-# load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
-# setwd(Sys.getenv("WORKING_DIR"))
-# rdata_dir      <- Sys.getenv("RDATA_DIR")
-# tracks_dir <- Sys.getenv("TRACKS_DIR")
-# shp_dir <- Sys.getenv("SHP_DIR")
-# processed_dir  <- Sys.getenv("PROCESSED_DIR")
-# reference_dir  <- Sys.getenv("REFERENCE_DIR")
-# logs_dir       <- Sys.getenv("LOGS_DIR")
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+setwd(Sys.getenv("WORKING_DIR"))
+rdata_dir      <- Sys.getenv("RDATA_DIR")
+tracks_dir <- Sys.getenv("TRACKS_DIR")
+shp_dir <- Sys.getenv("SHP_DIR")
+processed_dir  <- Sys.getenv("PROCESSED_DIR")
+reference_dir  <- Sys.getenv("REFERENCE_DIR")
+logs_dir       <- Sys.getenv("LOGS_DIR")
 
 # --- Load data
 if (file.exists(file.path(rdata_dir, "predicted.RData"))) {
