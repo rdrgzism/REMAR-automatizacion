@@ -14,6 +14,7 @@
 # interpolates tracks at regular intervals, and removes invalid regions.
 
 # --- Libraries
+library(dotenv)
 library(data.table)
 library(sf)
 library(dplyr)
@@ -23,12 +24,17 @@ library(stats)
 rm(list = ls())
 
 # # --- Folder Paths ---
-setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
-rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
-shp_dir   <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/shp")
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+setwd(Sys.getenv("WORKING_DIR"))
+rdata_dir      <- Sys.getenv("RDATA_DIR")
+shp_dir <- Sys.getenv("SHP_DIR")
 
-# rdata_dir <- "../.data./data/rdata"
-# shp_dir "../../../../shp" 
+# setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
+# rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
+# shp_dir   <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/shp")
+
+# rdata_dir <- "../../data/rdata"
+# shp_dir <- "../../data/shp"
 
 # --- Configuration --
 metier_config <- list(

@@ -31,12 +31,13 @@ library(RWeka)
 
 rm(list = ls())
 
-load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+
 
 # --- Folder paths
 # rdata_dir     <- "../../data/rdata"
 # processed_dir <- "../../data/processed"
 
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 setwd(Sys.getenv("WORKING_DIR"))
 rdata_dir      <- Sys.getenv("RDATA_DIR")
 
@@ -132,3 +133,9 @@ for (metier in metiers) {
   save_list[[paste0("journey_", metier)]] <- get(paste0("journey_", metier))
 }
 save(list = names(save_list), file = file.path(rdata_dir, "predicted.RData"))
+
+# rm(list = ls())
+# 
+# rdata_dir     <- "../../data/rdata"
+# processed_dir <- "../../data/processed"
+# load(file.path(rdata_dir, "predicted.RData"))

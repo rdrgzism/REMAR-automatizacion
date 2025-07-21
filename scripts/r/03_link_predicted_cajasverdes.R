@@ -24,6 +24,7 @@
 # --- Load libraries
 library(dotenv)
 library(data.table)
+library(stringr)
 library(sf)
 library(dplyr)
 library(lubridate)
@@ -31,14 +32,13 @@ library(lubridate)
 rm(list = ls())
 
 # --- Folder paths
-# setwd("C:/Users/Usuario/Desktop/REMAR/REMAR-automatizacion/scripts/r")
 # rdata_dir   <- "../../data/rdata"
 # tracks_dir <- "C:/Users/Usuario/OneDrive - Universitat de les Illes Balears/Archivos de Bernat Morro Cortès - REMAR (REcursos MARins pesquers a Balears)/P. artesanal/05_CaixesVerdes"
 # shp_dir     <- "../../data/shp"
 # reference_dir <- "../../data/reference"
 # processed_dir <- "../../data/processed"
 # logs_dir <- "../../logs"
-# 
+
 load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 setwd(Sys.getenv("WORKING_DIR"))
 rdata_dir      <- Sys.getenv("RDATA_DIR")
@@ -61,8 +61,8 @@ if (file.exists(file.path(rdata_dir, "predicted.RData"))) {
 # ---------------------------------------
 
 # n_days = Sys.Date() - as.Date("2024-01-01"), para el análisis diario set a 1
-process_gps_data <- function(n_days = 564, tracks_dir, reference_dir, shp_dir,
-                             logs_dir) {
+process_gps_data <- function(end_date = NULL, n_days = 1, tracks_dir, 
+                             reference_dir, shp_dir,logs_dir) {
   
   if (!dir.exists(shp_dir)) {
     stop(paste("El directorio shp_dir no existe:", shp_dir))
@@ -86,8 +86,14 @@ process_gps_data <- function(n_days = 564, tracks_dir, reference_dir, shp_dir,
     stop(paste("El directorio tracks_dir no existe:", tracks_dir))
   }
   
+  if (!is.null(end_date)) {
+    today <- as.Date(end_date)
+  } else {
+    today <- Sys.Date()
+  }
+  
   today_str <- format(Sys.Date(), "%Y-%m-%d")
-  start_year <- year(Sys.Date() - n_days)
+  start_year <- year(today - n_days)
   current_year <- year(Sys.Date())
   valid_years <- as.character(seq(start_year, current_year))
   
@@ -98,14 +104,16 @@ process_gps_data <- function(n_days = 564, tracks_dir, reference_dir, shp_dir,
     list.files(p, pattern = "\\.csv$", full.names = TRUE)
   }))
   
-  recent_files <- track_files[file.info(track_files)$mtime >= 
-                                Sys.Date() - n_days]
+  dates_in_name <- str_extract(basename(track_files), "\\d{8}")
+  dates_parsed <- as.Date(dates_in_name, format = "%Y%m%d")
+  recent_files <- track_files[dates_parsed >= today - n_days &
+                                dates_parsed <= today]
   
   if (length(recent_files) == 0) {
     stop("No se encontraron archivos recientes en los últimos ", n_days, " días.")
   }
   
-  GPS_DATA <- rbindlist(lapply(track_files, function(file) {
+  GPS_DATA <- rbindlist(lapply(recent_files, function(file) {
     fread(file,
           select = c("Id", "Latitude", "Longitude", "Speed",
                      "GPSDateTime", "VesselName", "Cfr"),
@@ -350,7 +358,8 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
   return(df_tracks)
 }
 
-df_data <- process_gps_data(n_days = 400, 
+df_data <- process_gps_data(end_date = "2025-01-31",
+                            n_days = 30, 
                             tracks_dir = tracks_dir,
                             shp_dir = shp_dir,
                             reference_dir = reference_dir,
@@ -362,12 +371,13 @@ df_data <- process_gps_data(n_days = 400,
 metiers <- c("jonquillera", "tresmall", "palangre", "nasa", "cercol", "llampuguera")
 list_metier_tracks <- list()
 for (metier in metiers) {
-  journey_var <- get(paste0("journey_", metier))
+  var_name <- paste0("journey_", metier)
+  journey_var <- get(var_name)
   filename <- paste0("raw_", metier, "_tracks.RData")
   tracks <- process_tracks(journey_var, df_data, filename)
-  list_metier_tracks[[metier]] <- tracks
   
   if (nrow(tracks) > 0) {
+    list_metier_tracks[[metier]] <- tracks
     save(tracks, file = file.path(rdata_dir, filename))
   } else {
     message(paste("No se guardó", metier, "porque el dataset está vacío."))
@@ -381,7 +391,7 @@ tracks_tresmall <- list_metier_tracks[["tresmall"]]
 
 journey_track_jonquillera <- unique(tracks_jonquillera$journey)
 journey_track_tresmall <- unique(tracks_tresmall$journey)
-gps_journey <- unique(journey_combinado$journey)
+gps_journey <- unique(c(journey_track_jonquillera, journey_track_tresmall))
 # --- CALCULO DE METRICAS ---
 # --- Extraer fechas únicas
 
@@ -397,8 +407,8 @@ ventas_sin_salida_df <- data.frame()
 
 today_str <- format(Sys.Date(), "%Y-%m-%d")
 # --- Bucle por cada fecha de venta
-salidas_sin_venta_file <- paste0(rdata_dir, "salida_sin_venta_", today_str, ".csv")
-ventas_sin_salida_file <- paste0(rdata_dir, "ventas_sin_salida_", today_str, ".csv")
+salidas_sin_venta_file <- paste0(rdata_dir, "/salida_sin_venta_", today_str, ".csv")
+ventas_sin_salida_file <- paste0(rdata_dir, "/ventas_sin_salida_", today_str, ".csv")
 for (dia in fechas_venta) {
   dia <- as.Date(dia)
   dia_gps <- dia - 1

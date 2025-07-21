@@ -7,6 +7,7 @@
 
 # Author: Ismael Rodriguez
 # Date: 2025-04-28
+# Update: 2024-07-21
 
 # Objective:
 # Preprocess daily sales bills and generate the required objects for:
@@ -19,18 +20,12 @@
 # - journey_list: Unique trip identifiers
 # - OUT: matrix of landed weights per fishing trip and species
 
-# TO DO:
-# - Add check for active vessels, all vessels that have not being seen in the
-# sells bills for over 6 moths are considered retired.
-
 # --- Libraries
 library(dotenv)
 library(stringr)
 library(dplyr)
 
 rm(list = ls())
-
-load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 
 # --- Folder paths
 # input_dir      <- "../../data/ventaslonja"
@@ -39,12 +34,17 @@ load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 # logs_dir <- "../../logs"
 # reference_dir  <- "../../data/reference"
 
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 setwd(Sys.getenv("WORKING_DIR"))
 input_dir      <- Sys.getenv("INPUT_DIR")
 rdata_dir      <- Sys.getenv("RDATA_DIR")
 processed_dir  <- Sys.getenv("PROCESSED_DIR")
 reference_dir  <- Sys.getenv("REFERENCE_DIR")
 logs_dir       <- Sys.getenv("LOGS_DIR")
+
+# --- Execution mode ---
+mode <- "range" # Options: "cron" or "range
+today_str <- format(Sys.Date(), "%Y-%m-%d")
 
 # --- Load all CSV sales bill files
 list_dirs <- list(input_dir = input_dir,
@@ -67,26 +67,53 @@ for (name in names(list_dirs)) {
   }
 }
 
-list_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
-if (length(list_files) == 0) stop("No CSV files found in input directory.")
+list_paths <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+if (length(list_paths) == 0) stop("No CSV files found in input directory.")
+
+if (mode == "cron") {
+  # target_dates <- Sys.Date()
+  target_dates <- as.Date("2025-05-30")
+  days <- seq(target_dates, target_dates - 10, by = -1)
+  days_str <- format(days, "%d-%m-%Y")
+  file_names <- paste0("IMEDEA_", days_str, "_", days_str, ".csv")
+  file_paths <- file.path(input_dir, file_names)
+  
+  existing_files <- file_paths[file.exists(file_paths)]
+  if (length(existing_files) < 5) {
+    stop("At least 5 sales files are required.")
+  }
+  
+  sorted_idx <- order(existing_files, decreasing = TRUE)
+  selected_files <- existing_files[sorted_idx][1:5]
+} else if (mode == "range") {
+  target_dates <- seq(as.Date("2025-01-01"), as.Date("2025-01-31"), 
+                         by = "day")
+  days_str <- format(target_dates, "%d-%m-%Y")
+  file_names <- paste0("IMEDEA_", days_str, "_", days_str, ".csv")
+  file_paths <- file.path(input_dir, file_names)
+  existing_files <- file_paths[file.exists(file_paths)]
+  
+  if (length(existing_files) == 0) {
+    stop("No matching files found in the selected range")
+  }
+  sorted_idx <- order(existing_files, decreasing = TRUE)
+  selected_files <- existing_files[sorted_idx]
+}
 
 # Read first file to fix column order
-first_file    <- read.csv(list_files[1], header = TRUE, sep = ",")
+first_file    <- read.csv(existing_files[1], header = TRUE, sep = ",")
 column_names  <- names(first_file)
 
+required_columns <- c("FECHA", "NEMBARCACION", "CONCEPTO", "IMPORTE", "PESONETO", "CODCENSO")
+missing <- setdiff(required_columns, column_names)
+if (length(missing) > 0) stop("Faltan columnas requeridas: ", paste(missing, collapse = ", "))
+
 # Load and reorder all datasets based on first file
-data_list <- lapply(list_files, function(file) {
+data_list <- lapply(selected_files, function(file) {
   df <- read.csv(file, header = TRUE, sep = ",")
   df <- df[, match(column_names, names(df))]
-  return(df)
-})
-
-data_list <- lapply(data_list, function(df) {
-  if (!"CEIUAPA" %in% names(df)) {
-    df$CEIUAPA <- NA_character_  # agrega columna si falta
-  } else {
-    df$CEIUAPA <- as.character(df$CEIUAPA)  # asegura tipo character
-  }
+  if (!"CEIUAPA" %in% names(df)) df$CEIUAPA <- NA_character_  # agrega columna si falta
+  df$CEIUAPA <- as.character(df$CEIUAPA)  # asegura tipo character
   return(df)
 })
 
@@ -94,10 +121,10 @@ data_list <- lapply(data_list, function(df) {
 DATA <- bind_rows(data_list)
 DATA <- DATA[complete.cases(DATA), ]
 DATA$FECHA <- as.Date(DATA$FECHA)
+target_dates <- unique(DATA$FECHA)
 # which(is.na(DATA$CODCENSO)) #integer(0)
 # which(is.na(DATA$CONCEPTO) | DATA$CONCEPTO == "") # integer(0)
 
-today_str <- format(Sys.Date(), "%Y-%m-%d")
 # ---------------------------------------
 # VESSEL NAMES: Normalize and match
 # ---------------------------------------
@@ -125,19 +152,14 @@ unknown_boats <- setdiff(DATA$CODCENSO, boats$CODCENSO)
 # unique(DATA$NEMBARCACION[DATA$CODCENSO %in% unknown_boats])
 # [1] "LA TAU"          "NA MANDRIA"      "NUEVO MARTINA"   "DES PAS SEGUNDO" "ES FERRE II"     "PEDRO Y BEATRIZ"
 if (length(unknown_boats) > 0) {
-  log_unknown_boats <- data.frame(
-    NEMBARCACION = unique(DATA$NEMBARCACION[DATA$CODCENSO %in% unknown_boats]),
-    CODCENSO = unknown_boats
-  )
-
-  # Log new boats not present in the species list
+  # Log new boats not present in the boats list
   log_file <- paste0(logs_dir, "/unknown_boats_", today_str, ".csv")
-  new_entries <- data.frame(
+  log_unknown_boats <- data.frame(
     CODCENSO = unknown_boats,
-    NEMBARCACIONs = log_unknown_boats$NEMBARCACION,
+    NEMBARCACIONs = unique(DATA$NEMBARCACION[DATA$CODCENSO %in% unknown_boats]),
     CFR = paste0("ESP", sprintf("%09d", unknown_boats))
   )
-  write.csv(new_entries, log_file, row.names = FALSE)
+  write.csv(log_unknown_boats, log_file, row.names = FALSE)
 
   # Warning message for newly found vessels
   warning_log <- paste0(logs_dir, "/warning_", today_str, ".log")
@@ -146,12 +168,7 @@ if (length(unknown_boats) > 0) {
   writeLines(msg, con = warning_log)    
   
   # Opcional: agregar temporalmente embarcaciones al dataset para evitar NAs
-  new_entries <- data.frame(
-    CODCENSO = unknown_boats,
-    NEMBARCACIONs = log_unknown_boats$NEMBARCACION,
-    CFR = paste0("ESP", sprintf("%09d", unknown_boats))
-  )
-  boats <- rbind(boats, new_entries)
+  boats <- rbind(boats, log_unknown_boats)
 }
 # log_unknown_boats
 # > log_unknown_boats
@@ -219,58 +236,100 @@ if (length(non_matched) > 0) {
 # ---------------------------------------
 # SALES / RETURNS: Remove refund pairs
 # ---------------------------------------
+process_daily_sales <- function(DATA, species_list, fechas) {
+  OUT_list <- list()
+  for (fecha_base in fechas) {
+    negative <- which(DATA$IMPORTE < 0 & DATA$FECHA == fecha_base)
+    to_remove <- integer(0)
+    
+    while(length(negative) > 0){
+      for(j in seq_along(negative)){
+        neg_idx <- negative[j]
+        neg_fecha <- DATA$FECHA[neg_idx]
+        candidates <- which(
+          DATA$IMPORTE == -DATA$IMPORTE[neg_idx] &
+            DATA$CONCEPTO == DATA$CONCEPTO[neg_idx] &
+            DATA$NEMBARCACION == DATA$NEMBARCACION[neg_idx] &
+            DATA$FECHA >= neg_fecha & DATA$FECHA <= (neg_fecha + 5)
+        )
+        if (length(candidates) > 0){
+          nearest_idx <- candidates[which.min(abs(candidates - neg_idx))]
+          to_remove <- c(to_remove, neg_idx, nearest_idx)
+        } else{
+          to_remove <- c(to_remove, neg_idx)
+        }
+      }
+      DATA <- DATA[-unique(to_remove), ]
+      negative <- which(DATA$IMPORTE < 0 & DATA$FECHA == fecha_base)
+    }
+    
+    # ---------------------------------------
+    # BUILD OUT MATRIX: [journey x species]
+    # ---------------------------------------
+    DATA_sub <- DATA[DATA$FECHA == fecha_base, ]
+    journey_list <- unique(DATA_sub$JOURNEY)
+    
+    OUT <- array(0, dim = c(length(journey_list), length(species_list)))
+    colnames(OUT) <- make.names(species_list, unique = TRUE)
+    rownames(OUT) <- journey_list
+    
+    for(i in seq_along(journey_list)){
+      temp <- which(DATA$JOURNEY == journey_list[i])
+      for(j in seq_along(temp)) {
+        temp2 <- which(species_list == DATA$ESPECIE[temp[j]])
+        if(!is.na(temp2)){
+          OUT[i, temp2] <- OUT[i, temp2] + DATA$PESONETO[temp[j]]
+        }
+      }
+    }
+    
+    OUT_list[[format(as.Date(fecha_base), "%Y-%m-%d")]] <- OUT
+  }
+  
+  return(OUT_list)
+}
 
-negative <- which(DATA$IMPORTE < 0)
-while(length(negative) > 0){
-  to_remove <- integer(0)
-  for(j in seq_along(negative)){
-    neg_idx <- negative[j]
-    neg_fecha <- DATA$FECHA[neg_idx]
-    candidates <- which(
-      DATA$IMPORTE == -DATA$IMPORTE[neg_idx] &
-        DATA$CONCEPTO == DATA$CONCEPTO[neg_idx] &
-        DATA$NEMBARCACION == DATA$NEMBARCACION[neg_idx] &
-        DATA$FECHA >= neg_fecha & DATA$FECHA <= (neg_fecha + 5)
+OUT_daily <- process_daily_sales(DATA, species_list, target_dates)
+
+if (mode == "cron") {
+  # Keep only the OUT matrix corresponding to the earliest date
+  fecha_target <- as.character(min(target_dates))
+  OUT <- OUT_daily[[fecha_target]]
+  
+  # Convert OUT matrix to dataframe
+  journey_parts <- do.call(rbind, strsplit(rownames(OUT), " / "))
+  OUT_df <- data.frame(
+    FECHA = as.Date(journey_parts[ ,1]),
+    NEMBARCACION = journey_parts[ ,2],
+    CFR = journey_parts[ ,3],
+    OUT,
+    row.names = NULL,
+    check.names = FALSE
+  )
+  
+} else if (mode == "range") {
+  # Combine all OUT matrices into one data frame
+  OUT_df <- do.call(rbind, lapply(names(OUT_daily), function(fecha) {
+    mat <- OUT_daily[[fecha]]
+    if (nrow(mat) == 0) return(NULL)
+    parts <- do.call(rbind, strsplit(rownames(mat), " / "))
+    data.frame(
+      FECHA = as.Date(parts[, 1]),
+      NEMBARCACION = parts[, 2],
+      CFR = parts[, 3],
+      mat,
+      row.names = NULL,
+      check.names = FALSE
     )
-    if (length(candidates) > 0){
-      nearest_idx <- candidates[which.min(abs(candidates - neg_idx))]
-      to_remove <- c(to_remove, neg_idx, nearest_idx)
-    } else{
-      to_remove <- c(to_remove, neg_idx)
-    }
-  }
-  DATA <- DATA[-unique(to_remove), ]
-  negative <- which(DATA$IMPORTE < 0)
+  }))
+  
+  # Optional: sort the final OUT_df by date
+  OUT_df <- OUT_df[order(OUT_df$FECHA), ]
+  
+  # Optional: save entire list if needed
+  OUT <- do.call(rbind, OUT_daily)
 }
 
-# ---------------------------------------
-# BUILD OUT MATRIX: [journey x species]
-# ---------------------------------------
-
-OUT <- array(0, dim = c(length(journey_list), length(species_list)))
-colnames(OUT) <- make.names(species_list, unique = TRUE)
-rownames(OUT) <- journey_list
-
-for(i in seq_along(journey_list)){
-  temp <- which(DATA$JOURNEY == journey_list[i])
-  for(j in seq_along(temp)) {
-    temp2 <- which(species_list == DATA$ESPECIE[temp[j]])
-    if(!is.na(temp2)){
-      OUT[i, temp2] <- OUT[i, temp2] + DATA$PESONETO[temp[j]]
-    }
-  }
-}
-
-# Build OUT as a data frame
-journey_parts <- do.call(rbind, strsplit(journey_list, " / "))
-OUT_df <- data.frame(
-  FECHA = as.Date(journey_parts[ ,1]),
-  NEMBARCACION = journey_parts[ ,2],
-  CFR = journey_parts[ ,3],
-  OUT,
-  row.names = NULL,
-  check.names = FALSE
-)
 
 # ---------------------------------------
 # EXPORT CLEANED DATA
