@@ -39,14 +39,22 @@ shp_dir <- Sys.getenv("SHP_DIR")
 models_dir       <- Sys.getenv("MODELS_DIR")
 
 # Load model and input data
-if (file.path(rdata_dir, paste0("input_", metier, ".RData"))) {
-  mod <- cmdstan_model(file.path(models_dir, paste0("model_", metier,".stan")))
-  load(file.path(rdata_dir, paste0("priors_modelo_", metier, ".RData")))
-  load(file.path(rdata_dir, paste0("input_", metier, ".RData")))
-} else{
-  stop(paste("El archivo", paste0("input_", metier, ".RData"),
-             "no se encuentra en el directorio especificado."))
+model_file <- file.path(models_dir, paste0("model_", metier,".stan"))
+input_file <- file.path(rdata_dir, paste0("input_", metier, ".RData"))
+priors_file <- file.path(rdata_dir, paste0("priors_modelo_", metier, ".RData"))
+if (!file.exists(input_file)) {
+  stop("Input file not found:", input_file)
+} 
+if (!file.exists(priors_file)) {
+  stop("Priors file not found:", priors_file)
 }
+if (!file.exists(model_file)) {
+  stop("Stan model file not found:", model_file)
+}
+
+mod <- cmdstan_model(model_file)
+load(priors_file)
+load(input_file)
 
 # Format timestamp and journey ID
 input$time <- as.POSIXct(input$time)
