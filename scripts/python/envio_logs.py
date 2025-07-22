@@ -17,7 +17,7 @@ EMAIL_RECEIVER = {
     "MIQUEL_PALMER": "",
     "EVA_MORAGES": "",
     "LLUISA_FLAQUER": "",
-    "ISMAEL_RODRIGUEZ": ""
+    "ISMAEL_RODRIGUEZ": "ismael.rodriguez@fueib.org"
 }
 
 today_str = date.today().strftime("%Y-%m-%d")

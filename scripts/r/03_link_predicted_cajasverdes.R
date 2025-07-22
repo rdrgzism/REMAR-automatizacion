@@ -22,7 +22,7 @@
 # - raw_tresmall_tracks.RData
 
 # --- Load libraries
-library(dotenv)
+# library(dotenv)
 library(data.table)
 library(stringr)
 library(sf)
@@ -407,8 +407,8 @@ ventas_sin_salida_df <- data.frame()
 
 today_str <- format(Sys.Date(), "%Y-%m-%d")
 # --- Bucle por cada fecha de venta
-salidas_sin_venta_file <- paste0(rdata_dir, "/salida_sin_venta_", today_str, ".csv")
-ventas_sin_salida_file <- paste0(rdata_dir, "/ventas_sin_salida_", today_str, ".csv")
+salidas_sin_venta_file <- paste0(logs_dir, "/salida_sin_venta_", today_str, ".csv")
+ventas_sin_salida_file <- paste0(logs_dir, "/ventas_sin_salida_", today_str, ".csv")
 for (dia in fechas_venta) {
   dia <- as.Date(dia)
   dia_gps <- dia - 1

@@ -10,6 +10,7 @@
 # Date: 2025-05-08
 
 # --- Libraries
+library(dotenv)
 library(data.table)
 library(sf)
 library(dplyr)
@@ -28,12 +29,13 @@ period <- 2 * 60  # seconds between interpolated points (adjust per metier)
 # --- Folder paths
 # rdata_dir <- "../../data/rdata"
 # shp_dir <- "../../data/shp"
-# models_dir <- "../../models"
+# models_dir <- "../../models/STAN"
 
-setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
-rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
-shp_dir   <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/shp")
-models_dir <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/models/STAN")
+load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+setwd(Sys.getenv("WORKING_DIR"))
+rdata_dir      <- Sys.getenv("RDATA_DIR")
+shp_dir <- Sys.getenv("SHP_DIR")
+models_dir       <- Sys.getenv("MODELS_DIR")
 
 # Load model and input data
 model_file <- file.path(models_dir, paste0("model_", metier,".stan"))
