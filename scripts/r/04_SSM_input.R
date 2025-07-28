@@ -23,15 +23,11 @@ library(stats)
 
 rm(list = ls())
 
-# # --- Folder Paths ---
+# --- Folder Paths ---
 load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 setwd(Sys.getenv("WORKING_DIR"))
 rdata_dir      <- Sys.getenv("RDATA_DIR")
 shp_dir <- Sys.getenv("SHP_DIR")
-
-# setwd(file.path(Sys.getenv("HOME"), "REMAR-automatizacion/scripts/r"))
-# rdata_dir      <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/rdata")
-# shp_dir   <- file.path(Sys.getenv("HOME"), "REMAR-automatizacion/data/shp")
 
 # rdata_dir <- "../../data/rdata"
 # shp_dir <- "../../data/shp"
@@ -57,7 +53,8 @@ for (metier_name in metier_names) {
   if (file.exists(tracks_path)) {
     load(tracks_path)         # OUT and journey_list
   } else{
-    stop("El archivo '", tracks_path,"' no se encuentra en el directorio especificado.")
+    warning("El archivo '", tracks_path,"' no se encuentra en el directorio especificado.")
+    next
   }
   
   # Ordenar y agrupar

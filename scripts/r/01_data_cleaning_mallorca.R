@@ -28,7 +28,7 @@ library(dplyr)
 rm(list = ls())
 
 # --- Folder paths
-# input_dir      <- "../../data/ventaslonja"
+# input_dir      <- "../../data/raw_data"
 # rdata_dir      <- "../../data/rdata"
 # processed_dir  <- "../../data/processed"
 # logs_dir <- "../../logs"
@@ -43,7 +43,7 @@ reference_dir  <- Sys.getenv("REFERENCE_DIR")
 logs_dir       <- Sys.getenv("LOGS_DIR")
 
 # --- Execution mode ---
-mode <- "range" # Options: "cron" or "range
+mode <- "cron" # Options: "cron" or "range"
 today_str <- format(Sys.Date(), "%Y-%m-%d")
 
 # --- Load all CSV sales bill files
@@ -67,29 +67,29 @@ for (name in names(list_dirs)) {
   }
 }
 
-list_paths <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+list_paths <- list.files(input_dir, pattern = "\\.CSV$", full.names = TRUE)
 if (length(list_paths) == 0) stop("No CSV files found in input directory.")
 
 if (mode == "cron") {
-  # target_dates <- Sys.Date()
-  target_dates <- as.Date("2025-05-30")
-  days <- seq(target_dates, target_dates - 10, by = -1)
-  days_str <- format(days, "%d-%m-%Y")
-  file_names <- paste0("IMEDEA_", days_str, "_", days_str, ".csv")
+  target_date <- Sys.Date() - 5
+  days <- seq(target_date, Sys.Date(), by = 1)
+  days_str <- format(days, "%Y%m%d")
+  file_names <- paste0("IMEDEA_", days_str, "_", days_str, ".CSV")
   file_paths <- file.path(input_dir, file_names)
   
   existing_files <- file_paths[file.exists(file_paths)]
   if (length(existing_files) < 5) {
-    stop("At least 5 sales files are required.")
+    selected_files <- existing_files
+    warning("At least 5 sales files are required.")
+  } else {
+    sorted_idx <- order(existing_files, decreasing = TRUE)
+    selected_files <- existing_files[sorted_idx][1:5]
   }
-  
-  sorted_idx <- order(existing_files, decreasing = TRUE)
-  selected_files <- existing_files[sorted_idx][1:5]
 } else if (mode == "range") {
   target_dates <- seq(as.Date("2025-01-01"), as.Date("2025-01-31"), 
                          by = "day")
   days_str <- format(target_dates, "%d-%m-%Y")
-  file_names <- paste0("IMEDEA_", days_str, "_", days_str, ".csv")
+  file_names <- paste0("IMEDEA_", days_str, "_", days_str, ".CSV")
   file_paths <- file.path(input_dir, file_names)
   existing_files <- file_paths[file.exists(file_paths)]
   
@@ -101,7 +101,7 @@ if (mode == "cron") {
 }
 
 # Read first file to fix column order
-first_file    <- read.csv(existing_files[1], header = TRUE, sep = ",")
+first_file    <- read.csv(selected_files[1], header = TRUE, sep = ",")
 column_names  <- names(first_file)
 
 required_columns <- c("FECHA", "NEMBARCACION", "CONCEPTO", "IMPORTE", "PESONETO", "CODCENSO")
@@ -120,7 +120,8 @@ data_list <- lapply(selected_files, function(file) {
 # Combine all into one data frame
 DATA <- bind_rows(data_list)
 DATA <- DATA[complete.cases(DATA), ]
-DATA$FECHA <- as.Date(DATA$FECHA)
+DATA$FECHA <- as.Date(DATA$FECHA, format = "%d/%m/%Y")
+DATA$CODCENSO <- as.integer(DATA$CODCENSO)
 target_dates <- unique(DATA$FECHA)
 # which(is.na(DATA$CODCENSO)) #integer(0)
 # which(is.na(DATA$CONCEPTO) | DATA$CONCEPTO == "") # integer(0)
@@ -335,7 +336,15 @@ if (mode == "cron") {
 # EXPORT CLEANED DATA
 # ---------------------------------------
 
-write.csv(DATA, file.path(processed_dir,"DATA_final.csv"), row.names = FALSE)
+write.csv(DATA, file.path(processed_dir,"DATA_daily.csv"), row.names = FALSE)
 write.csv(OUT_df, file.path(processed_dir, "OUT_metadata.csv"), 
           row.names = FALSE)
+writeLines(fecha_target, "fecha_target.txt")
 save(OUT, journey_list, file = file.path(rdata_dir,"sample.RData"))
+
+
+rm(list = ls())
+
+rdata_dir      <- "../../data/rdata"
+processed_dir  <- "../../data/processed"
+logs_dir <- "../../logs"

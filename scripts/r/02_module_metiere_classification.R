@@ -36,7 +36,7 @@ rm(list = ls())
 # --- Folder paths
 # rdata_dir     <- "../../data/rdata"
 # processed_dir <- "../../data/processed"
-
+# 
 load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
 setwd(Sys.getenv("WORKING_DIR"))
 rdata_dir      <- Sys.getenv("RDATA_DIR")
@@ -117,21 +117,24 @@ close(pb)
 # ---------------------------------------
 
 metiers <- c("jonquillera", "tresmall", "palangre", "nasa", "cercol", "llampuguera")
+save_list <- list(results = results)
 for (metier in metiers) {
   res <- extract_metier(metier, results, OUT, journey_list)
-  assign(paste0("OUT_", metier), res$OUT)
-  assign(paste0("journey_", metier), res$journey)
+  if (!(is.null(res) || length(res) == 0 ||
+      (nrow(res$OUT) == 0 && length(res$journey) == 0))) {
+    element <- paste0("OUT_", metier)
+    journey <- paste0("journey_", metier)
+    assign(element, res$OUT)
+    assign(journey, res$journey)
+    save_list[[element]] <- get(element)
+    save_list[[journey]] <- get(journey)
+  }
 }
 
 # ---------------------------------------
 # SAVE CLASSIFIED OUTPUTS
 # ---------------------------------------
 
-save_list <- list(results = results)
-for (metier in metiers) {
-  save_list[[paste0("OUT_", metier)]] <- get(paste0("OUT_", metier))
-  save_list[[paste0("journey_", metier)]] <- get(paste0("journey_", metier))
-}
 save(list = names(save_list), file = file.path(rdata_dir, "predicted.RData"))
 
 # rm(list = ls())

@@ -22,7 +22,7 @@
 # - raw_tresmall_tracks.RData
 
 # --- Load libraries
-# library(dotenv)
+library(dotenv)
 library(data.table)
 library(stringr)
 library(sf)
@@ -33,7 +33,7 @@ rm(list = ls())
 
 # --- Folder paths
 # rdata_dir   <- "../../data/rdata"
-# tracks_dir <- "C:/Users/Usuario/OneDrive - Universitat de les Illes Balears/Archivos de Bernat Morro Cortès - REMAR (REcursos MARins pesquers a Balears)/P. artesanal/05_CaixesVerdes"
+# tracks_dir <- "../../data/cajasverdes"
 # shp_dir     <- "../../data/shp"
 # reference_dir <- "../../data/reference"
 # processed_dir <- "../../data/processed"
@@ -86,34 +86,47 @@ process_gps_data <- function(end_date = NULL, n_days = 1, tracks_dir,
     stop(paste("El directorio tracks_dir no existe:", tracks_dir))
   }
   
+  today <- Sys.Date()
+  end_date <- NULL
+  n_days <- 1
+  
   if (!is.null(end_date)) {
-    today <- as.Date(end_date)
+    start_year <- year(end_date - n_days)
+    end_year <- year(end_date)
+    valid_years <- as.character(seq(start_year, end_year))
+    
+    track_files <- list.files(tracks_dir, 
+                              pattern = "\\.csv$", full.names = TRUE)
+    subdirs <- file.path(tracks_dir, valid_years)
+    track_files <- c(track_files, 
+                     unlist(lapply(subdirs, function(p) {
+                       if (dir.exists(p)) {
+                         list.files(p, pattern = "\\.csv$", full.names = TRUE)
+                       } else {
+                         character(0)
+                       }
+                     })))
+    
+    gps_date <- seq(as.Date(paste0(valid_years[1], "-01-01")),
+                    as.Date(end_date),
+                    by = "day") - 1
   } else {
-    today <- Sys.Date()
+    fecha_target <- as.Date(readLines("fecha_target.txt"))
+    gps_date <- fecha_target - 1
+    track_files <- list.files(tracks_dir, pattern = "\\.csv$", full.names = TRUE)
   }
   
   today_str <- format(Sys.Date(), "%Y-%m-%d")
-  start_year <- year(today - n_days)
-  current_year <- year(Sys.Date())
-  valid_years <- as.character(seq(start_year, current_year))
-  
-  all_subdirs <- list.dirs(tracks_dir, recursive = FALSE, full.names = TRUE)
-  subdirs <- all_subdirs[basename(all_subdirs) %in% valid_years]
-  
-  track_files <- unlist(lapply(subdirs, function(p) {
-    list.files(p, pattern = "\\.csv$", full.names = TRUE)
-  }))
-  
   dates_in_name <- str_extract(basename(track_files), "\\d{8}")
   dates_parsed <- as.Date(dates_in_name, format = "%Y%m%d")
-  recent_files <- track_files[dates_parsed >= today - n_days &
-                                dates_parsed <= today]
-  
-  if (length(recent_files) == 0) {
-    stop("No se encontraron archivos recientes en los últimos ", n_days, " días.")
+  selected_files <- track_files[dates_parsed == gps_date]
+
+  if (length(selected_files) == 0) {
+    warning(paste("No GPS data found for date", gps_date))
+    return(NULL)
   }
   
-  GPS_DATA <- rbindlist(lapply(recent_files, function(file) {
+  GPS_DATA <- rbindlist(lapply(selected_files, function(file) {
     fread(file,
           select = c("Id", "Latitude", "Longitude", "Speed",
                      "GPSDateTime", "VesselName", "Cfr"),
@@ -287,8 +300,7 @@ sf_data_to_df <- function(sf_data, df_data = NULL) {
 # FUNCTION TO PROCESS TRACKS
 # ---------------------------------------
 
-process_tracks <- function(journey_vector, df_data, output_filename) {
-  
+process_tracks <- function(journey_vector, df_data) {
   if (inherits(df_data, "sf")) {
     df_data <- sf_data_to_df(df_data)
   }
@@ -306,10 +318,8 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
   # Lista para acumular datasets válidos
   list_tracks <- list()
   duplicated_log <- data.frame()
-  
   for (i in seq_along(journey_vector)) {
     journey_id <- journey_vector[i]
-    
     # Separar componentes del journey
     temp <- unlist(strsplit(journey_id, " / "))
     track_day <- as.Date(temp[1]) - 1
@@ -320,7 +330,9 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
     dataset <- df_data %>% 
       filter(VesselName == vesselName,
              Cfr == cfr,
-             as.Date(GPSDateTime) == track_day)
+             as.Date(GPSDateTime) == track_day,
+             inside_port == FALSE,
+             inland == FALSE)
     
     if (nrow(dataset) == 0) {
       next
@@ -331,7 +343,7 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
     
     # Guardar duplicados si existen
     if (any(duplicated_logical)) {
-      duplicated_file <- paste0(rdata_dir, "duplicated_bips_", today_str, ".csv")
+      duplicated_file <- paste0(logs_dir, "/duplicated_bips_", today_str, ".csv")
       duplicated_rows <- dataset[duplicated_logical]
       duplicated_log <- rbind(duplicated_log,
                               duplicated_rows %>% 
@@ -358,40 +370,50 @@ process_tracks <- function(journey_vector, df_data, output_filename) {
   return(df_tracks)
 }
 
-df_data <- process_gps_data(end_date = "2025-01-31",
-                            n_days = 30, 
+df_data <- process_gps_data(
+                            #end_date = "", n_days = 1, 
                             tracks_dir = tracks_dir,
                             shp_dir = shp_dir,
                             reference_dir = reference_dir,
                             logs_dir = logs_dir)
 
+# library(sf)
+# library(mapview)
+# sf_data <- st_as_sf(df_data, coords = c("Lon", "Lat"), crs = 4326)
+# mapview(sf_data, zcol = "VesselName")
 # save.image("df_data_check.RData")
 # load("df_data_check.RData")
-
 metiers <- c("jonquillera", "tresmall", "palangre", "nasa", "cercol", "llampuguera")
+list_journey_sells <- list()
 list_metier_tracks <- list()
 for (metier in metiers) {
-  var_name <- paste0("journey_", metier)
-  journey_var <- get(var_name)
-  filename <- paste0("raw_", metier, "_tracks.RData")
-  tracks <- process_tracks(journey_var, df_data, filename)
-  
-  if (nrow(tracks) > 0) {
-    list_metier_tracks[[metier]] <- tracks
-    save(tracks, file = file.path(rdata_dir, filename))
+  var_out <- paste0("OUT_", metier)
+  var_journey <- paste0("journey_", metier)
+  if (!exists(var_out, envir = .GlobalEnv) || 
+      !exists(var_journey, envir = .GlobalEnv)) {
+    message(paste("Saltando", metier, "- no existe OUT o JOURNEY"))
   } else {
-    message(paste("No se guardó", metier, "porque el dataset está vacío."))
-  }
+    filename <- paste0("raw_", metier, "_tracks.RData")
+    filepath <- file.path(rdata_dir, filename)
+    journey_var <- get(var_journey, envir = .GlobalEnv)
+    tracks <- process_tracks(journey_var, df_data)
+    list_metier_tracks[[metier]] <- tracks
+    list_journey_sells[[metier]] <- journey_var
+    save(tracks, file = file.path(rdata_dir, filename))
+    }
 }
 
-tracks_processed <- rbindlist(list_metier_tracks)
-journey_combinado <- c(journey_jonquillera, journey_tresmall)
-tracks_jonquillera <- list_metier_tracks[["jonquillera"]]
-tracks_tresmall <- list_metier_tracks[["tresmall"]]
+# sf_tracks_processed <- st_as_sf(tracks_processed, coords = c("Lon", "Lat"), crs = 4326)
+# mapview(sf_tracks_processed, zcol = "VesselName")
+journey_combinado <- unique(unlist(list_journey_sells, use.names = FALSE))
 
-journey_track_jonquillera <- unique(tracks_jonquillera$journey)
-journey_track_tresmall <- unique(tracks_tresmall$journey)
-gps_journey <- unique(c(journey_track_jonquillera, journey_track_tresmall))
+temp <- intersect(c("jonquillera", "tresmall"), names(list_metier_tracks))
+gps_journey <- unique(unlist(lapply(
+  list_metier_tracks[temp],
+  function(tracks) {
+    tracks$journey[!tracks$inside_port & !tracks$inland]
+  }), use.names = FALSE))
+
 # --- CALCULO DE METRICAS ---
 # --- Extraer fechas únicas
 
