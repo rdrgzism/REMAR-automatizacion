@@ -101,7 +101,8 @@ if (mode == "cron") {
 }
 
 # Read first file to fix column order
-first_file    <- read.csv(selected_files[1], header = TRUE, sep = ",")
+first_file    <- read.csv(selected_files[1], header = TRUE, sep = ",",
+                          encoding = "UTF-8")
 column_names  <- names(first_file)
 
 required_columns <- c("FECHA", "NEMBARCACION", "CONCEPTO", "IMPORTE", "PESONETO", "CODCENSO")
@@ -110,7 +111,7 @@ if (length(missing) > 0) stop("Faltan columnas requeridas: ", paste(missing, col
 
 # Load and reorder all datasets based on first file
 data_list <- lapply(selected_files, function(file) {
-  df <- read.csv(file, header = TRUE, sep = ",")
+  df <- read.csv(file, header = TRUE, sep = ",", encoding = "UTF-8")
   df <- df[, match(column_names, names(df))]
   if (!"CEIUAPA" %in% names(df)) df$CEIUAPA <- NA_character_  # agrega columna si falta
   df$CEIUAPA <- as.character(df$CEIUAPA)  # asegura tipo character
@@ -341,10 +342,3 @@ write.csv(OUT_df, file.path(processed_dir, "OUT_metadata.csv"),
           row.names = FALSE)
 writeLines(fecha_target, "fecha_target.txt")
 save(OUT, journey_list, file = file.path(rdata_dir,"sample.RData"))
-
-
-rm(list = ls())
-
-rdata_dir      <- "../../data/rdata"
-processed_dir  <- "../../data/processed"
-logs_dir <- "../../logs"
