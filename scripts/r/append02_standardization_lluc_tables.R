@@ -14,7 +14,7 @@ leer_merluza_csv <- function(file_path){
 }
 
 # Directorio de origen 
-path <- "C:/Users/Usuario/OneDrive - Universitat de les Illes Balears/estimacionTamañoDB/datos_L_merluza_2021-2024"
+path <- "C:/Users/Usuario/Desktop/REMAR/visorfinal/data/merluza"
 files <- list.files(path, pattern = "*.csv", full.names = TRUE)
 
 # Leer y unir todos
@@ -30,6 +30,24 @@ merluza_data <- merluza_data %>%
     pes = as.numeric(str_replace(pes, ",", ".")),
     longitud = as.numeric(str_replace(longitud, ",", ".")),
     day = as.Date(day)
+  ) %>%
+  group_by(day) %>%
+  summarise(
+    mean_pes = mean(pes, na.rm = TRUE),
+    sd_pes = sd(pes, na.rm = TRUE),
+    n_pes = sum(!is.na(pes)),
+    se_pes = sd_pes / sqrt(n_pes),
+    lower_ci_pes = mean_pes - 1.96 * se_pes,
+    upper_ci_pes = mean_pes + 1.96 * se_pes,
+    
+    mean_lon = mean(longitud, na.rm = TRUE),
+    sd_lon = sd(longitud, na.rm = TRUE),
+    n_lon = sum(!is.na(longitud)),
+    se_lon = sd_lon / sqrt(n_lon),
+    lower_ci_lon = mean_lon - 1.96 * se_lon,
+    upper_ci_lon = mean_lon + 1.96 * se_lon,
+    
+    .groups = "drop"
   )
 
 colnames(merluza_data) <- tolower(gsub(" ", "_", colnames(merluza_data)))

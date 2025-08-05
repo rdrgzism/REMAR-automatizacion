@@ -1,0 +1,7 @@
+Error in scan(text = lst[[length(lst)]], quiet = TRUE) :
+  scan() expected 'a real', got 'IllegalArgumentException:'
+Calls: st_intersection ... geos_op2_geom -> st_sfc -> CPL_geos_op2 -> <Anonymous> -> scan
+Error in (function (msg)  :
+  IllegalArgumentException: point array must contain 0 or >1 elements
+Calls: st_intersection ... geos_op2_geom -> st_sfc -> CPL_geos_op2 -> <Anonymous>
+Execution halted
