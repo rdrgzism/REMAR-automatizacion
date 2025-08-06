@@ -89,7 +89,7 @@ if (mode == "cron") {
     selected_files <- selected_files[sorted_idx][1:5]
   }
 } else if (mode == "range") {
-  target_dates <- seq(as.Date("2025-07-01"), as.Date("2025-07-31"), 
+  target_dates <- seq(as.Date("2025-07-21"), as.Date("2025-07-31"), 
                          by = "day")
   days_str <- format(target_dates, "%Y%m%d")
   file_names <- paste0("IMEDEA_", days_str, "_", days_str, ".csv")

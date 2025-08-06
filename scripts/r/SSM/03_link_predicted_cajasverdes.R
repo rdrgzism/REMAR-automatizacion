@@ -354,7 +354,7 @@ process_tracks <- function(journey_vector, df_data) {
 }
 
 df_data <- process_gps_data(
-                            end_date = "2025-07-31", n_days = 30, 
+                            end_date = "2025-07-31", n_days = 10, 
                             tracks_dir = tracks_dir,
                             shp_dir = shp_dir,
                             reference_dir = reference_dir,

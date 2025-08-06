@@ -229,18 +229,6 @@ df_dissolved <- df_dissolved %>%
   filter(n() > 1) %>%
   ungroup()
 
-if (nrow(df_dissolved) == 0) {
-  # Por si ocurre en una iteración larga.
-  save.image(file.path(results_dir, paste0(metier, "_erroneo_",
-                                           year_str, ".RData")))
-  cat("Advertencia: No hay suficientes puntos para crear geometrías lineales 
-      con sf_dissolved para", metier, "\n")
-  warning("No hay suficientes puntos para crear geometrías lineales con 
-          sf_dissolved.")
-  
-  return(NULL)
-}
-
 sf_dissolved <- st_as_sf(df_dissolved, coords =c( "x", "y"), crs = 25831)
 
 points <- sf_dissolved

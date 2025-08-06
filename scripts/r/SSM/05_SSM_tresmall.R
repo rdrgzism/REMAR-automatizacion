@@ -10,7 +10,7 @@
 # Date: 2025-05-08
 
 # --- Libraries
-library(dotenv)
+# library(dotenv)
 library(data.table)
 library(sf)
 library(dplyr)
@@ -28,16 +28,16 @@ metier <- "tresmall" #cambia por ser el output dle anterior
 period <- 4 * 60  # seconds between interpolated points (adjust per metier)
 
 # --- Folder paths
-# rdata_dir <- "../../../data/rdata"
-# results_dir <- "../../../data/rdata/results"
-# shp_dir <- "../../../data/shp"
-# models_dir <- "../../../models/STAN"
+rdata_dir <- "../../../data/rdata"
+results_dir <- "../../../data/rdata/results"
+shp_dir <- "../../../data/shp"
+models_dir <- "../../../models/STAN"
 
-load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
-setwd(Sys.getenv("WORKING_DIR"))
-rdata_dir      <- Sys.getenv("RDATA_DIR")
-shp_dir <- Sys.getenv("SHP_DIR")
-models_dir       <- Sys.getenv("MODELS_DIR")
+# load_dot_env(file = file.path("~/REMAR-automatizacion/config/.env"))
+# setwd(Sys.getenv("WORKING_DIR"))
+# rdata_dir      <- Sys.getenv("RDATA_DIR")
+# shp_dir <- Sys.getenv("SHP_DIR")
+# models_dir       <- Sys.getenv("MODELS_DIR")
 
 # Load model and input data
 model_file <- file.path(models_dir, paste0("model_", metier,".stan"))
@@ -186,11 +186,14 @@ intersected <- intersected %>% mutate(pct = (length_segment / length_m) * 100)
 
 # Save shapefile
 year_str <- year(min(input$time, na.rm = TRUE))
+routes$journey <- as.character(routes$journey)
+intersected$journey <- as.character(intersected$journey)
+
 st_write(routes, file.path(shp_dir, paste0(metier, "_routes_", 
-                                           year_str, ".shp")), 
+                                           year_str, ".geojson")), 
          delete_layer = TRUE)
 st_write(intersected, file.path(shp_dir, paste0(metier, "_intersected_",
-                                                year_str, ".shp")),
+                                                year_str, ".geojson")),
          delete_layer = TRUE)
 
 save(final_df,routes, intersected, 
