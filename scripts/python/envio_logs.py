@@ -233,7 +233,7 @@ def enviar_reporte(logs_dir: Path, fecha: date | None = None):
     validar_config()
 
     if fecha is None:
-        fecha = date.today() - timedelta(days=1)
+        fecha = date.today()
     fecha_str = fecha.strftime("%Y-%m-%d")
 
     # Rutas de logs
