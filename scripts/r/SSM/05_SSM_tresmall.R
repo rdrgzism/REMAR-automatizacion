@@ -120,7 +120,8 @@ for (i in seq_len(nrow(unique_tracks))) {
     data = stan_data,
     chains = n_chains, parallel_chains = 2,
     iter_warmup = 1000, iter_sampling = 1000,
-    init = inits, max_treedepth = 12, adapt_delta = 0.9
+    init = inits, max_treedepth = 12, adapt_delta = 0.9,
+    refresh = 0
   )
 
   z_rep <- as_draws_df(fit$draws("z_rep"))
